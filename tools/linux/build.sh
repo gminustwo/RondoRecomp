@@ -62,7 +62,6 @@ mkdir -p "$OUT"
 install -m 755 "$L/cmake/rondo_setup" "$L/cmake/RondoRecomp Setup" tools/linux/AppRun "$OUT/"
 install -m 644 tools/linux/RondoRecomp.desktop tools/linux/rondorecomp.png "$OUT/"
 ln -s rondorecomp.png "$OUT/.DirIcon"
-echo "$VER" > "$OUT/version.txt" && chmod 644 "$OUT/version.txt"
 install -m 644 "$L/cmake/sdk/lib/libSDL3.so.0" "$OUT/"
 cp -r "$L/cmake/sdk" "$OUT/sdk"
 find "$OUT/sdk" -type d -exec chmod 755 {} + && find "$OUT/sdk" -type f -exec chmod 644 {} +
@@ -118,6 +117,11 @@ chmod 644 "$OUT/THIRD_PARTY.txt"
 
 # the AppImage's folder as a tar, which keeps those permissions on the way out of the
 # container; tools/package_release_linux.sh makes the AppImage from it
+# version.txt: the version and a fingerprint of everything else in the image. Setup copies it
+# into the game it builds (build/version.txt), and AppRun rebuilds the game when they differ:
+# a new build of the same version too.
+ID=$(cd "$OUT" && find . -type f ! -name version.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+echo "$VER $ID" > "$OUT/version.txt" && chmod 644 "$OUT/version.txt"
 tar -cf "$L/appdir.tar" -C "$OUT" --owner=0 --group=0 --numeric-owner .
 echo "appdir: $L/appdir.tar ($(du -sh "$OUT" | cut -f1))"
 rm -rf "$P"

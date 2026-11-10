@@ -745,10 +745,17 @@ int setup_main(int argc, char **argv)
         return fail("building");
     }
     if (!build(sdk, zig, out, gen_dir)) return fail("building");
-    /* which version built it: the AppImage rebuilds the game when it is a newer one */
-    char stamp[1100];
+    /* Which version built it: the AppImage rebuilds the game when it is another one. The
+     * AppImage's version.txt (its version and a fingerprint of its contents, tools/linux/
+     * build.sh) is copied, so a new build of the same version counts as another. */
+    char stamp[1100], mine[1100];
     join(stamp, sizeof stamp, out, "build/version.txt");
-    SDL_SaveFile(stamp, RONDO_VERSION "\n", strlen(RONDO_VERSION "\n"));
+    join(mine, sizeof mine, rondo_tools_dir(), "version.txt");
+    size_t mine_len = 0;
+    void *mine_text = SDL_LoadFile(mine, &mine_len);
+    if (mine_text) SDL_SaveFile(stamp, mine_text, mine_len);
+    else SDL_SaveFile(stamp, RONDO_VERSION "\n", strlen(RONDO_VERSION "\n"));
+    SDL_free(mine_text);
     char done[1100];
     join(done, sizeof done, out, GAME_PROGRAM);
     say("\nDone: %s\n", done);
