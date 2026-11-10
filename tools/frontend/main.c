@@ -276,9 +276,8 @@ static void start_screen_info(Menu *m, const Session *ss, const Settings *set, c
 /* Start screen: RondoRecomp Setup (next to rondo.exe) adds a disc or rebuilds. */
 static bool open_setup(char *status, size_t n)
 {
-    const char *base = SDL_GetBasePath();
     char exe[1100];
-    snprintf(exe, sizeof exe, "%s" SETUP_PROGRAM, base ? base : "");
+    snprintf(exe, sizeof exe, "%s" SETUP_PROGRAM, rondo_tools_dir());   /* programs.h: the AppImage's */
     if (!SDL_GetPathInfo(exe, NULL)) {
         snprintf(status, n, SETUP_PROGRAM " is not next to " GAME_PROGRAM);
         return false;
@@ -380,9 +379,8 @@ static void update_install(Menu *m)
                                                                  : "There is no newer version to install.");
         return;
     }
-    const char *base = SDL_GetBasePath();
     char setup[1100], err[200];
-    snprintf(setup, sizeof setup, "%s" SETUP_CLI_PROGRAM, base ? base : "");
+    snprintf(setup, sizeof setup, "%s" SETUP_CLI_PROGRAM, rondo_tools_dir());
     if (!SDL_GetPathInfo(setup, NULL)) {
         snprintf(m->status, sizeof m->status, SETUP_CLI_PROGRAM " is not next to " GAME_PROGRAM ".");
         return;
@@ -401,7 +399,9 @@ static void relaunch(const char *const *args)
 {
     const char *base = SDL_GetBasePath();
     static char exe[1100];
-    snprintf(exe, sizeof exe, "%s" GAME_PROGRAM, base ? base : "");
+    /* from the AppImage: the new AppImage, which starts the game it built */
+    if (rondo_appimage()) snprintf(exe, sizeof exe, "%s", rondo_appimage());
+    else snprintf(exe, sizeof exe, "%s" GAME_PROGRAM, base ? base : "");
     const char *argv[8] = {exe};
     for (int i = 0; args[i] && i < 6; i++) argv[i + 1] = args[i];
 #ifdef _WIN32

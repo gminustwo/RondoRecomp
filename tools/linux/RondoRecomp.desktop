@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=RondoRecomp
+Comment=Rondo of Blood, recompiled from your own disc
+Exec=RondoRecomp
+Icon=rondorecomp
+Categories=Game;
+Terminal=false

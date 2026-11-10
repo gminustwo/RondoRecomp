@@ -15,6 +15,7 @@
  * now): the game removes what is left when it next starts.
  */
 #include <SDL3/SDL.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -503,6 +504,72 @@ static int failed(const char *step)
     return 1;
 }
 
+/* the release's package into `path`, its size and SHA-256 checked */
+static bool download(const UpdateInfo *info, const char *path)
+{
+    char err[256];
+    last_pct = -1;
+    int status = http_get_file(info->url, update_user_agent(), path, info->size, on_download, NULL, err, sizeof err);
+    if (status != 200) { snprintf(g_err, sizeof g_err, "%s (%s)", err, info->url); return false; }
+    SDL_PathInfo pi;
+    if (!SDL_GetPathInfo(path, &pi) || (info->size > 0 && (long long)pi.size != info->size)) {
+        snprintf(g_err, sizeof g_err, "the download is %lld bytes, not %lld", (long long)pi.size, info->size);
+        return false;
+    }
+    setup_progress_hook("Downloading", 100);
+    if (info->sha256[0]) {
+        char sum[65];
+        if (!file_sha256(path, sum) || strcmp(sum, info->sha256)) {
+            snprintf(g_err, sizeof g_err, "the download is damaged: its SHA-256 is not the one GitHub gives");
+            return false;
+        }
+        say("  SHA-256 checked: %s\n", sum);
+    }
+    return true;
+}
+
+/* From the Linux AppImage (programs.h, tools/linux/AppRun): the new AppImage is downloaded next
+ * to this one and builds the game; only then does it take this one's place (a rename: this one
+ * keeps running from the old file). A failed build leaves the game as it was. */
+static int update_appimage(const char *dir, const UpdateInfo *info)
+{
+#ifdef _WIN32
+    (void)dir;
+    (void)info;
+    return 1;
+#else
+    const char *app = rondo_appimage();
+    char fresh[1100];
+    snprintf(fresh, sizeof fresh, "%s.new", app);
+    say("\n[2/4] Downloading %s\n", info->asset);
+    if (!download(info, fresh)) { SDL_RemovePath(fresh); return failed("downloading"); }
+    if (chmod(fresh, 0755) != 0) {
+        snprintf(g_err, sizeof g_err, "cannot make %s executable: %s", fresh, strerror(errno));
+        SDL_RemovePath(fresh);
+        return failed("downloading");
+    }
+
+    say("\n[3/4] Rebuilding " GAME_PROGRAM " with the new version\n");
+    const char *args[] = {fresh, "--setup-cli", "--rebuild", "--out", dir, NULL};
+    if (!setup_run(args)) {
+        char why[512];
+        snprintf(why, sizeof why, "%s", g_err);
+        SDL_RemovePath(fresh);
+        snprintf(g_err, sizeof g_err, "%s; the game was left as it was", why);
+        return failed("rebuilding");
+    }
+
+    say("\n[4/4] Putting the new AppImage in place of %s\n", app);
+    if (rename(fresh, app) != 0) {
+        snprintf(g_err, sizeof g_err, "cannot replace %s: %s", app, strerror(errno));
+        SDL_RemovePath(fresh);
+        return failed("installing");
+    }
+    say("\nUpdated to RondoRecomp %s.\n", info->version);
+    return 0;
+#endif
+}
+
 int setup_update(const char *dir, bool check_only)
 {
     say("RondoRecomp Setup " RONDO_VERSION " (update)\n\n[1/5] Checking for a new version\n");
@@ -532,6 +599,7 @@ int setup_update(const char *dir, bool check_only)
     for (int i = 0; i < 4; i++)
         if (info.notes[i][0]) say("    - %s\n", info.notes[i]);
     if (check_only) return 0;
+    if (rondo_appimage()) return update_appimage(dir, &info);
 
     char upd[1100], archive[1300], staged[1200];
     join(upd, sizeof upd, dir, "update");
@@ -541,25 +609,7 @@ int setup_update(const char *dir, bool check_only)
     join(staged, sizeof staged, upd, "new");
 
     say("\n[2/5] Downloading %s\n", info.asset);
-    last_pct = -1;
-    status = http_get_file(info.url, update_user_agent(), archive, info.size, on_download, NULL, err, sizeof err);
-    if (status != 200) { snprintf(g_err, sizeof g_err, "%s (%s)", err, info.url); remove_tree(upd); return failed("downloading"); }
-    SDL_PathInfo pi;
-    if (!SDL_GetPathInfo(archive, &pi) || (info.size > 0 && (long long)pi.size != info.size)) {
-        snprintf(g_err, sizeof g_err, "the download is %lld bytes, not %lld", (long long)pi.size, info.size);
-        remove_tree(upd);
-        return failed("downloading");
-    }
-    setup_progress_hook("Downloading", 100);
-    if (info.sha256[0]) {
-        char sum[65];
-        if (!file_sha256(archive, sum) || strcmp(sum, info.sha256)) {
-            snprintf(g_err, sizeof g_err, "the download is damaged: its SHA-256 is not the one GitHub gives");
-            remove_tree(upd);
-            return failed("downloading");
-        }
-        say("  SHA-256 checked: %s\n", sum);
-    }
+    if (!download(&info, archive)) { remove_tree(upd); return failed("downloading"); }
 
     say("\n[3/5] Unpacking\n");
     SDL_CreateDirectory(staged);

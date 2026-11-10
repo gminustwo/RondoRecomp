@@ -453,9 +453,9 @@ static bool build(const char *sdk, const char *zig, const char *out, const char 
     const char *dll_dir = "lib";
 #endif
     for (size_t i = 0; i < sizeof dlls / sizeof dlls[0]; i++) {
-        char src[1100], dst[1100];
-        join(src, sizeof src, sdk, dll_dir);
-        join(src, sizeof src, src, dlls[i]);
+        char lib[1100], src[1200], dst[1100];
+        join(lib, sizeof lib, sdk, dll_dir);   /* (not into src itself: glibc's snprintf clears it first) */
+        join(src, sizeof src, lib, dlls[i]);
         join(dst, sizeof dst, out, dlls[i]);
         SDL_PathInfo si, di;
         if (!SDL_GetPathInfo(src, &si)) continue;
@@ -563,9 +563,8 @@ int setup_main(int argc, char **argv)
         else input = argv[i];
     }
     if (update) {
-        const char *base = SDL_GetBasePath();
         char dir[1024];
-        snprintf(dir, sizeof dir, "%s", out_arg ? out_arg : (base ? base : "."));
+        snprintf(dir, sizeof dir, "%s", out_arg ? out_arg : rondo_home_dir());
         absolute(dir, sizeof dir);
         return setup_update(dir, check);
     }
@@ -575,11 +574,12 @@ int setup_main(int argc, char **argv)
                         "       rondo_setup --update [--check] [--out DIR]\n");
         return 2;
     }
-    const char *base = SDL_GetBasePath();
+    /* the game is built in home; sdk/ and zig/ are next to Setup (programs.h: both are this
+     * folder but in the Linux AppImage) */
     char out[1024], sdk[1024], zig[1024], stage[1100], game[1100], gen_dir[1100], cue[1100];
-    snprintf(out, sizeof out, "%s", out_arg ? out_arg : (base ? base : "."));
-    if (sdk_arg) snprintf(sdk, sizeof sdk, "%s", sdk_arg); else join(sdk, sizeof sdk, out, "sdk");
-    if (zig_arg) snprintf(zig, sizeof zig, "%s", zig_arg); else join(zig, sizeof zig, out, ZIG_PROGRAM);
+    snprintf(out, sizeof out, "%s", out_arg ? out_arg : rondo_home_dir());
+    if (sdk_arg) snprintf(sdk, sizeof sdk, "%s", sdk_arg); else join(sdk, sizeof sdk, rondo_tools_dir(), "sdk");
+    if (zig_arg) snprintf(zig, sizeof zig, "%s", zig_arg); else join(zig, sizeof zig, rondo_tools_dir(), ZIG_PROGRAM);
     SDL_CreateDirectory(out);
     absolute(out, sizeof out);
     absolute(sdk, sizeof sdk);
@@ -702,6 +702,10 @@ int setup_main(int argc, char **argv)
         return fail("building");
     }
     if (!build(sdk, zig, out, gen_dir)) return fail("building");
+    /* which version built it: the AppImage rebuilds the game when it is a newer one */
+    char stamp[1100];
+    join(stamp, sizeof stamp, out, "build/version.txt");
+    SDL_SaveFile(stamp, RONDO_VERSION "\n", strlen(RONDO_VERSION "\n"));
     char done[1100];
     join(done, sizeof done, out, GAME_PROGRAM);
     say("\nDone: %s\n", done);

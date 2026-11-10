@@ -94,7 +94,7 @@ the download), and an icon and version resource for the executables.
 
 ```sh
 tools/package_release_linux.sh     # on Linux or in WSL, with podman
-                                   # -> dist/RondoRecomp-<version>-linux-x86_64.tar.gz
+                                   # -> dist/RondoRecomp-<version>-x86_64.AppImage
 ```
 
 Built in an Ubuntu 22.04 container (`tools/linux/Containerfile`, `tools/linux/build.sh`), so it
@@ -106,16 +106,32 @@ container builds:
 - The Setup programs, linked against SDL3 with zlib static.
 - The SDK, with Zig 0.17.0 for Linux.
 
-The release folder is put together inside the container, so the archive keeps exact
-permissions: the programs are 755 and everything else 644.
+The release is an AppImage: one file, which is what a Steam Deck player adds to Steam. Its
+folder is put together inside the container, so the image keeps exact permissions: the
+programs are 755 and everything else 644. The container hands it back as a tar, and
+`tools/package_release_linux.sh` makes the squashfs image (zstd) from that tar with the
+host's `mksquashfs` (squashfs-tools 4.6 or newer). The image goes after the AppImage runtime
+(type2-runtime 20251108, pinned by SHA-256; it carries its own FUSE, so the system needs no
+libfuse).
 
-The release folder:
+Inside the AppImage:
 
 | File | |
 |---|---|
+| `AppRun` | what the AppImage starts (`tools/linux/AppRun`), see below |
 | `RondoRecomp Setup`, `rondo_setup` | Setup with a window, and from the command line |
 | `libSDL3.so.0` | used by Setup and the game; both find it next to themselves (`$ORIGIN`) |
 | `sdk/`, `zig/` | as on Windows (`sdk/lib/libSDL3.so.0` to link against) |
+| `version.txt`, `RondoRecomp.desktop`, `rondorecomp.png` | the version; the desktop entry and its icon (`tools/linux/make_icon.py`, drawn from shapes) |
+
+The AppImage is read-only, so Setup builds the game outside it, in a folder of its own:
+`~/.local/share/RondoRecomp/install` (`RONDO_HOME` sets another). `AppRun` passes three
+folders on (`tools/frontend/programs.h`): `RONDO_APPDIR`, where the image is mounted (Setup's
+tools); `RONDO_HOME`, where the game is built; and `RONDO_APPIMAGE`, the AppImage file.
+Started without options, it starts the built game. If there is no game yet, it opens Setup's
+window. If the game was built by another version (`build/version.txt`, which Setup writes),
+it opens Setup's window, which rebuilds and then plays. `--setup` opens Setup's window, and
+`--setup-cli` runs `rondo_setup`.
 
 Setup builds `rondo` with `zig cc -target x86_64-linux-gnu.2.35`. It links against glibc
 2.35's symbols whatever the machine has, plus `-D_DEFAULT_SOURCE`, because rcheevos uses
@@ -162,12 +178,21 @@ From 1.0, an installation updates itself from the GitHub releases
      Steam keeps track of it; a new process on Windows.
    - The new game removes what is left of `update/` (the old files that were in use).
 
-Each release has, for each system, the full package and an update package without `zig/`:
-`RondoRecomp-<v>-windows-x64-update-zig<zig>.zip` (about 7 MB against 104 MB) and
-`RondoRecomp-<v>-linux-x86_64-update-zig<zig>.tar.gz` (about 5 MB). The packaging scripts
-make both. The Zig version in the name is `RONDO_ZIG_VERSION`. An installation downloads
-the update package only when that name matches its own Zig; otherwise it downloads the
-full package, so a Zig upgrade needs nothing special.
+From the Linux AppImage, steps 3 to 5 are different:
+1. The new AppImage is downloaded next to the old one (`<name>.new`) and checked.
+2. It rebuilds the game (`--setup-cli --rebuild`). If that fails, it is deleted, and the
+   game is left as it was.
+3. Only then is it renamed over the old AppImage, so the name Steam starts stays the same.
+   The running game keeps its old, now unnamed, image until it exits.
+4. The game restarts through the new AppImage, with `execv` again.
+
+Each release has, for Windows, the full package and an update package without `zig/`:
+`RondoRecomp-<v>-windows-x64-update-zig<zig>.zip` (about 7 MB against 104 MB). The Zig
+version in the name is `RONDO_ZIG_VERSION`. An installation downloads the update package
+only when that name matches its own Zig; otherwise it downloads the full package, so a Zig
+upgrade needs nothing special. For Linux it has the AppImage,
+`RondoRecomp-<v>-x86_64.AppImage`, which updates whole. (A Linux installation from a folder
+looks for `-linux-x86_64.tar.gz` packages, which releases no longer have.)
 
 To test without publishing:
 - `RONDO_UPDATE_URL` points the check at another release JSON, for example one served from
@@ -183,6 +208,13 @@ each case:
 - a wrong SHA-256, which is refused
 - a package that cannot build, which is put back
 - the real latest release on GitHub
+
+`tools/updtest/linux.sh` tests a Linux folder installation, from the tar.gz packages releases had
+before the AppImage. `tools/updtest/appimage.sh` tests the AppImage, in WSL too:
+- Setup builds the game through it.
+- The game starts through it.
+- The game updates itself from a local server offering the same AppImage, and restarts
+  through the new one.
 
 ## Work plan
 

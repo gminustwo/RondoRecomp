@@ -212,8 +212,8 @@ typedef struct Release {
     char *body;
     size_t body_cap;
     bool draft, prerelease;
-    Asset cur, full, slim;
-    bool have_full, have_slim;
+    Asset cur, full, slim, appimage;
+    bool have_full, have_slim, have_appimage;
 } Release;
 
 static bool asset_field(Js *j, const char *key, void *ctx)
@@ -261,6 +261,9 @@ static bool release_field(Js *j, const char *key, void *ctx)
                 } else if (ends_with(r->cur.name, "-" UPDATE_SYSTEM UPDATE_EXT)) {
                     r->full = r->cur;
                     r->have_full = true;
+                } else if (ends_with(r->cur.name, UPDATE_APPIMAGE)) {
+                    r->appimage = r->cur;
+                    r->have_appimage = true;
                 }
             }
             if (js_lit(j, ',')) continue;
@@ -351,7 +354,9 @@ bool update_parse(const char *json, size_t len, UpdateInfo *info, char *err, siz
     notes_from(r.body, info->notes);
     free(r.body);
     if (r.draft || r.prerelease) return true;          /* not one to install */
-    const Asset *a = r.have_slim ? &r.slim : r.have_full ? &r.full : NULL;
+    /* from the AppImage: the new AppImage, the whole of it (it has the compiler inside) */
+    const Asset *a = rondo_appimage() ? (r.have_appimage ? &r.appimage : NULL)
+                   : r.have_slim ? &r.slim : r.have_full ? &r.full : NULL;
     /* https only, unless the release itself came over plain http (a local test server) */
     if (a && (!strncmp(a->url, "https://", 8) || !strncmp(update_api_url(), "http://", 7))) {
         snprintf(info->asset, sizeof info->asset, "%s", a->name);

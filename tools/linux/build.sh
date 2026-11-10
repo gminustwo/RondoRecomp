@@ -1,10 +1,10 @@
 #!/bin/bash
 # Builds the Linux release inside the Ubuntu 22.04 container (tools/package_release_linux.sh
 # runs it there): SDL3 from pinned sources, Setup and the SDK against it, the pinned Zig for
-# Linux, then dist/RondoRecomp-<version>-linux-x86_64.tar.gz and its update package (the same
-# without zig/: dist/RondoRecomp-<version>-linux-x86_64-update-zig<zig version>.tar.gz, see
-# tools/frontend/update.h). No game material: players provide their own disc image to Setup,
-# which builds `rondo` on their machine.
+# Linux, then dist/RondoRecomp-<version>-x86_64.AppImage: one file to run (and to add to Steam
+# on a Steam Deck), which also updates itself (tools/linux/AppRun, tools/frontend/update.h).
+# No game material: players provide their own disc image to Setup, which builds `rondo` on
+# their machine, in a folder outside the AppImage.
 #
 # Work files in build/linux (SDL3 and Zig are kept between runs; delete them to redo).
 set -euo pipefail
@@ -29,6 +29,9 @@ fetch https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/$SDL.ta
       9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3 $SDL.tar.gz
 fetch https://ziglang.org/download/0.17.0/$ZIG.tar.xz \
       1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026 $ZIG.tar.xz
+# the AppImage's runtime: mounts the image (FUSE, linked in: no libfuse needed) and starts AppRun
+fetch https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 \
+      2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d appimage-runtime-20251108-x86_64
 
 # SDL3: shared, its backends loaded at run time (dlopen), so it needs nothing the system
 # may lack
@@ -51,12 +54,15 @@ for t in rondo_setup "RondoRecomp Setup" sdk/lib/libSDL3.so.0; do
     [ -f "$L/cmake/$t" ] || { echo "linux: $t was not built"; exit 1; }
 done
 
-# the release folder, put together on the container's own file system so that the archive
-# keeps exact permissions (executables 755, everything else 644)
+# the AppImage's folder, put together on the container's own file system so that the image
+# keeps exact permissions (programs 755, everything else 644)
 P=$(mktemp -d)
-OUT=$P/RondoRecomp
+OUT=$P/RondoRecomp.AppDir
 mkdir -p "$OUT"
-install -m 755 "$L/cmake/rondo_setup" "$L/cmake/RondoRecomp Setup" "$OUT/"
+install -m 755 "$L/cmake/rondo_setup" "$L/cmake/RondoRecomp Setup" tools/linux/AppRun "$OUT/"
+install -m 644 tools/linux/RondoRecomp.desktop tools/linux/rondorecomp.png "$OUT/"
+ln -s rondorecomp.png "$OUT/.DirIcon"
+echo "$VER" > "$OUT/version.txt" && chmod 644 "$OUT/version.txt"
 install -m 644 "$L/cmake/sdk/lib/libSDL3.so.0" "$OUT/"
 cp -r "$L/cmake/sdk" "$OUT/sdk"
 find "$OUT/sdk" -type d -exec chmod 755 {} + && find "$OUT/sdk" -type f -exec chmod 644 {} +
@@ -85,6 +91,9 @@ strip "$OUT/rondo_setup" "$OUT/RondoRecomp Setup"
     echo "    http://openlab.jp/efont/shinonome/"
     echo "rcheevos 12.5.0 (sdk/src/rcheevos, built into rondo for RetroAchievements): MIT,"
     echo "    RetroAchievements - https://github.com/RetroAchievements/rcheevos"
+    echo "AppImage type2-runtime 20251108 (the start of the AppImage file, which mounts it): MIT,"
+    echo "    the AppImage project - https://github.com/AppImage/type2-runtime; it includes"
+    echo "    libfuse 3 (LGPL 2.1) and squashfuse (BSD), see that page"
     echo
     echo "The license texts follow."
     for f in "$DEPS/SDL3-LICENSE.txt" /usr/share/doc/zlib1g/copyright tools/fonts/OFL-*.txt third_party/rcheevos/LICENSE; do
@@ -103,11 +112,8 @@ strip "$OUT/rondo_setup" "$OUT/RondoRecomp Setup"
 } > "$OUT/THIRD_PARTY.txt"
 chmod 644 "$OUT/THIRD_PARTY.txt"
 
-mkdir -p dist
-rm -f dist/RondoRecomp-*-linux-x86_64*.tar.gz
-TGZ=dist/RondoRecomp-$VER-linux-x86_64.tar.gz
-UPD=dist/RondoRecomp-$VER-linux-x86_64-update-zig$ZIGV.tar.gz
-tar -czf "$TGZ" -C "$P" --owner=0 --group=0 --numeric-owner RondoRecomp
-tar -czf "$UPD" -C "$P" --owner=0 --group=0 --numeric-owner --exclude=RondoRecomp/zig RondoRecomp
-echo "release: $TGZ ($(du -sh "$TGZ" | cut -f1); $(du -sh "$OUT" | cut -f1) unpacked), $UPD ($(du -sh "$UPD" | cut -f1))"
+# the AppImage's folder as a tar, which keeps those permissions on the way out of the
+# container; tools/package_release_linux.sh makes the AppImage from it
+tar -cf "$L/appdir.tar" -C "$OUT" --owner=0 --group=0 --numeric-owner .
+echo "appdir: $L/appdir.tar ($(du -sh "$OUT" | cut -f1))"
 rm -rf "$P"

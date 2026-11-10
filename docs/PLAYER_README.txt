@@ -28,23 +28,27 @@ next to the first (game\en and game\ja) instead of replacing it.
 
 Linux and Steam Deck
 --------------------
-The Linux download (RondoRecomp-<version>-linux-x86_64.tar.gz) works the same way. Its
-programs have no .exe: "RondoRecomp Setup", rondo_setup, and the game, rondo. It needs a
+The Linux download is a single file, RondoRecomp-<version>-x86_64.AppImage. It needs a
 64-bit PC with glibc 2.35 or newer: SteamOS 3 on the Steam Deck, Ubuntu 22.04, Debian 12,
-Fedora 36, Arch, or later.
+Fedora 36, Arch, or later. Run it: the first time, Setup opens; once the game is built, the
+AppImage starts the game. Setup keeps the game it builds, and your disc's files, in
+~/.local/share/RondoRecomp/install (the folder RONDO_HOME names, if you set it). To open
+Setup again, run the AppImage with --setup.
 
 On the Steam Deck:
 1. Switch to Desktop Mode (Steam button, Power, Switch to Desktop).
-2. Put the .tar.gz and your disc zip on the Deck (download them, or copy them over). In
-   Dolphin, the file manager, right-click the .tar.gz and choose Extract, Extract archive
-   here, for example in your home folder.
-3. Open the RondoRecomp folder and double-click "RondoRecomp Setup" (if asked, choose to
-   run it). Click "Disc zip..." and pick your zip (or "Disc folder..." for an unzipped
-   image), and wait until it says Done.
+2. Put the AppImage and your disc zip on the Deck (download them, or copy them over), for
+   example in your home folder.
+3. In Dolphin, the file manager, right-click the AppImage, choose Properties, then
+   Permissions, tick "Is executable" and click OK. Double-click the AppImage: Setup opens.
+   Click "Disc zip..." and pick your zip (or "Disc folder..." for an unzipped image), and
+   wait until it says Done.
 4. Add the game to Steam: open Steam, Games, Add a Non-Steam Game to My Library, Browse...,
-   choose the file "rondo" in the RondoRecomp folder, then Add Selected Programs.
+   choose the AppImage, then Add Selected Programs.
 5. Return to Gaming Mode (the "Return to Gaming Mode" icon on the desktop). The game is in
    your library under Non-Steam.
+Keep the AppImage where it is once it is in Steam: Steam starts it from there, and updates
+replace it there.
 The Deck's controls are an Xbox controller to the game: View is Back, Menu is Start, L1 and
 R1 are LB and RB, L2 and R2 are LT and RT. Save states as Back + RB work the same way (View +
 R1). Options, saves and states are kept in ~/.local/share/RondoRecomp/RondoRecomp/.
@@ -74,13 +78,15 @@ Updates
 When the game starts it asks GitHub (github.com/gminustwo/RondoRecomp) whether there is a
 newer version. If there is, the start screen says so under the title and beside Updates.
 The Updates page shows what is new; "Download and install" does the rest:
-1. Setup downloads the new version for your system. That is usually a few MB: the compiler
-   is only downloaded again when a new version needs a different one. The download is
-   checked against the SHA-256 checksum GitHub publishes for it.
-2. Its files take the place of the old ones next to the game. Your disc images, saves,
-   save states and options are not touched.
+1. Setup downloads the new version for your system. On Windows that is usually a few MB:
+   the compiler is only downloaded again when a new version needs a different one. On
+   Linux it is the new AppImage. The download is checked against the SHA-256 checksum
+   GitHub publishes for it.
+2. On Windows, its files take the place of the old ones next to the game. Your disc
+   images, saves, save states and options are not touched.
 3. Setup rebuilds the game from the new version (about a minute; longer on a Steam Deck),
-   and the game restarts as the new version.
+   and the game restarts as the new version. On Linux, the new AppImage then takes the
+   old one's place, under the same name, so Steam keeps finding it.
 If anything goes wrong, the old version is put back and the page says what happened.
 "Check at launch" (on by default) turns the question to GitHub off; "Check now" asks
 anyway. RondoRecomp Setup's window also offers "Update to ..." when there is a new version,
@@ -224,7 +230,7 @@ rondo_setup.exe <disc.zip | disc.cue | folder>
 rondo_setup.exe --rebuild                 recompile again with misses.txt
 rondo_setup.exe --update                  install the latest version from GitHub (--check:
                                           only say whether there is one)
-(./rondo_setup on Linux)
+(on Linux: the AppImage with --setup-cli, then the same options)
 
 Status
 ------

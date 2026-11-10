@@ -143,13 +143,30 @@ static void draw_button(SDL_Renderer *r, const Button *b, bool hover)
     SDL_RenderDebugText(r, tx, b->y + (b->h - 8) / 2, b->label);
 }
 
+/* the game; from the AppImage, the AppImage again, which starts the game it built (and is the
+ * new one after an update) */
+static bool play(void)
+{
+    char exe[1100];
+    if (rondo_appimage()) snprintf(exe, sizeof exe, "%s", rondo_appimage());
+    else snprintf(exe, sizeof exe, "%s" GAME_PROGRAM, base_dir);
+    const char *args[] = {exe, NULL};
+    SDL_Process *p = SDL_CreateProcess(args, false);
+    if (!p) return false;
+    SDL_DestroyProcess(p);
+    return true;
+}
+
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    /* --rebuild: start rebuilding at once (the AppImage, when it is newer than the game) */
+    bool auto_rebuild = false;
+    for (int i = 1; i < argc; i++)
+        if (!strcmp(argv[i], "--rebuild")) auto_rebuild = true;
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
-    const char *base = SDL_GetBasePath();
-    snprintf(base_dir, sizeof base_dir, "%s", base ? base : "./");
+    /* where the game is built: this folder, or the AppImage's own (programs.h) */
+    snprintf(base_dir, sizeof base_dir, "%s", rondo_home_dir());
+    SDL_CreateDirectory(base_dir);
     mtx = SDL_CreateMutex();
     setup_line_hook = gui_line;
     setup_progress_hook = gui_progress;
@@ -163,8 +180,11 @@ int main(int argc, char **argv)
     bool running = true;
     float mx = 0, my = 0;
     Uint64 t0 = SDL_GetTicks();
+    if (auto_rebuild && exists("game")) start(MODE_REBUILD);
     while (running) {
         int st = SDL_GetAtomicInt(&state);
+        /* the rebuild the AppImage asked for is done: on to the game */
+        if (auto_rebuild && st == DONE && run_mode == MODE_REBUILD && play()) break;
         bool have_game = exists("game"), have_exe = exists(GAME_PROGRAM);
         http_poll();
         const UpdateInfo *news = NULL;
@@ -205,11 +225,7 @@ int main(int argc, char **argv)
                     } else if (buttons[i].id == B_UPDATE) {
                         start(MODE_UPDATE);
                     } else if (buttons[i].id == B_PLAY) {
-                        char exe[1100];
-                        snprintf(exe, sizeof exe, "%s" GAME_PROGRAM, base_dir);
-                        const char *args[] = {exe, NULL};
-                        SDL_Process *p = SDL_CreateProcess(args, false);
-                        if (p) { SDL_DestroyProcess(p); running = false; }
+                        if (play()) running = false;
                     } else if (buttons[i].id == B_QUIT) {
                         running = false;
                     }
@@ -238,8 +254,15 @@ int main(int argc, char **argv)
             SDL_RenderDebugText(ren, 24, 84, "   Unzipped: click \"Disc folder...\" and pick the folder it is in.");
             SDL_RenderDebugText(ren, 24, 96, "   The original Japanese disc or the English translation: either works.");
             SDL_RenderDebugText(ren, 24, 112, "2. Setup checks the disc, extracts it, recompiles the game code");
-            SDL_RenderDebugText(ren, 24, 124, "   and builds " GAME_PROGRAM " in this folder. This takes about a minute.");
-            SDL_RenderDebugText(ren, 24, 140, "3. Click Play.");
+            if (rondo_appimage()) {
+                char where[100];
+                snprintf(where, sizeof where, "   in %.70s", base_dir);
+                SDL_RenderDebugText(ren, 24, 124, "   and builds the game (about a minute; longer on a Steam Deck)");
+                SDL_RenderDebugText(ren, 24, 136, where);
+            } else {
+                SDL_RenderDebugText(ren, 24, 124, "   and builds " GAME_PROGRAM " in this folder. This takes about a minute.");
+            }
+            SDL_RenderDebugText(ren, 24, 152, "3. Click Play.");
             SDL_RenderDebugText(ren, 24, 164, "Both languages: choose the other disc afterwards; it is added next");
             SDL_RenderDebugText(ren, 24, 176, "to the first, and the game's menu switches (Language).");
             SDL_RenderDebugText(ren, 24, 200, "Rebuild: recompile again, including code " GAME_PROGRAM " recorded");

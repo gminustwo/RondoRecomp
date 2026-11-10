@@ -7,8 +7,11 @@
  * RondoRecomp-<v>-linux-x86_64.tar.gz) and, to update, the same without the compiler
  * (...-update-zig<zig version>.zip / .tar.gz), a few MB instead of about 100. An installation
  * takes the smaller one when its compiler is the one named (RONDO_ZIG_VERSION), else the full
- * package. Tests point the check elsewhere (RONDO_UPDATE_URL: the release's JSON, as GitHub's
- * API gives it) and pretend to be an older version (RONDO_UPDATE_FROM). */
+ * package. On Linux the release is an AppImage (RondoRecomp-<v>-x86_64.AppImage): a game
+ * started from one updates by downloading the new AppImage, which takes the old one's place
+ * (programs.h, tools/linux/AppRun). Tests point the check elsewhere (RONDO_UPDATE_URL: the
+ * release's JSON, as GitHub's API gives it) and pretend to be an older version
+ * (RONDO_UPDATE_FROM). */
 #pragma once
 
 #include <stdbool.h>
@@ -23,6 +26,7 @@
 #define UPDATE_SYSTEM "linux-x86_64"
 #define UPDATE_EXT ".tar.gz"
 #endif
+#define UPDATE_APPIMAGE "-x86_64.AppImage"
 
 typedef struct UpdateInfo {
     char version[32];        /* "1.2" (the release's tag without its v) */

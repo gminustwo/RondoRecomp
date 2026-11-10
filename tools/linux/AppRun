@@ -1,0 +1,34 @@
+#!/bin/sh
+# The RondoRecomp AppImage starts here (tools/linux/build.sh makes it). The image holds Setup,
+# its SDK and its compiler, read-only. The game Setup builds from the player's own disc goes
+# to a folder of its own, $RONDO_HOME, by default ~/.local/share/RondoRecomp/install. Setup and
+# the game find both folders through RONDO_APPDIR and RONDO_HOME, and the AppImage itself
+# through RONDO_APPIMAGE (tools/frontend/programs.h), which the updater replaces.
+#
+#   RondoRecomp-<v>-x86_64.AppImage [options]       the game, with its options; Setup's window
+#                                                   first if the game is not built yet, or
+#                                                   was built by another version (it rebuilds)
+#   RondoRecomp-<v>-x86_64.AppImage --setup         Setup's window
+#   RondoRecomp-<v>-x86_64.AppImage --setup-cli ... rondo_setup (--rebuild, --update, a disc zip)
+HERE=$(dirname "$(readlink -f "$0")")
+DIR=${RONDO_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/RondoRecomp/install}
+DIR=${DIR%/}
+mkdir -p "$DIR" || exit 1
+RONDO_APPDIR="$HERE/"
+RONDO_HOME="$DIR/"
+RONDO_APPIMAGE=${APPIMAGE:-}    # set by the AppImage's runtime: the file that was started
+export RONDO_APPDIR RONDO_HOME RONDO_APPIMAGE
+
+case "${1:-}" in
+--setup) shift; exec "$HERE/RondoRecomp Setup" "$@" ;;
+--setup-cli) shift; exec "$HERE/rondo_setup" "$@" ;;
+esac
+
+if [ -x "$DIR/rondo" ]; then
+    if [ "$(cat "$DIR/build/version.txt" 2>/dev/null)" = "$(cat "$HERE/version.txt")" ]; then
+        exec "$DIR/rondo" "$@"
+    fi
+    # built by another version (the AppImage was replaced by hand): rebuild, then play
+    [ -d "$DIR/game" ] && exec "$HERE/RondoRecomp Setup" --rebuild
+fi
+exec "$HERE/RondoRecomp Setup"

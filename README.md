@@ -43,15 +43,16 @@ Findings so far: [docs/findings.md](docs/findings.md).
 - Windows and Linux (x86-64, glibc 2.35 or newer: the Steam Deck, Ubuntu 22.04, Debian 12,
   Fedora 36, Arch and later).
 - Updates from the game itself: the start screen says when a new release is out, and its
-  Updates page downloads it (a few MB), checks it, installs it, rebuilds the game and
-  restarts it. See [docs/distribution.md](docs/distribution.md#updates).
+  Updates page downloads it (a few MB on Windows, the new AppImage on Linux), checks it,
+  installs it, rebuilds the game and restarts it. See [docs/distribution.md](docs/distribution.md#updates).
 
 ## For players
 
 Download the release (`RondoRecomp-<version>-windows-x64.zip`, or
-`RondoRecomp-<version>-linux-x86_64.tar.gz` for Linux and the Steam Deck), run
-`RondoRecomp Setup`, choose your own disc image (zipped, or the folder it is unzipped in), then
-click Play. See [docs/PLAYER_README.txt](docs/PLAYER_README.txt) and
+`RondoRecomp-<version>-x86_64.AppImage` for Linux and the Steam Deck), run
+`RondoRecomp Setup` (on Linux, the AppImage), choose your own disc image (zipped, or the
+folder it is unzipped in), then click Play. On the Steam Deck, add the AppImage to Steam as a
+non-Steam game. See [docs/PLAYER_README.txt](docs/PLAYER_README.txt) and
 [docs/distribution.md](docs/distribution.md).
 
 ## Layout
