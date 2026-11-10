@@ -14,7 +14,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define UPDATE_REPO "fhclimited/RondoRecomp"
+#define UPDATE_REPO "gminustwo/RondoRecomp"
 
 #ifdef _WIN32
 #define UPDATE_SYSTEM "windows-x64"

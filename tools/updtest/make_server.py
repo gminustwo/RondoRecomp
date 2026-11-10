@@ -63,7 +63,7 @@ body = ('Test release.\n\n## Downloads\n\n- **Windows:** the zip.\n\n## New in %
         '- Third point.\n- Fourth point.\n- Fifth point (not shown).\n' % ver)
 release = {
     'tag_name': 'v' + ver, 'name': 'RondoRecomp ' + ver, 'draft': False, 'prerelease': False,
-    'html_url': 'https://github.com/fhclimited/RondoRecomp/releases/tag/v' + ver,
+    'html_url': 'https://github.com/gminustwo/RondoRecomp/releases/tag/v' + ver,
     'assets': assets, 'body': body,
 }
 with open(os.path.join(srv, 'latest.json'), 'w', encoding='utf-8') as f:

@@ -71,7 +71,7 @@ as usual; unlocks made offline are sent when it is back.
 
 Updates
 -------
-When the game starts it asks GitHub (github.com/fhclimited/RondoRecomp) whether there is a
+When the game starts it asks GitHub (github.com/gminustwo/RondoRecomp) whether there is a
 newer version. If there is, the start screen says so under the title and beside Updates.
 The Updates page shows what is new; "Download and install" does the rest:
 1. Setup downloads the new version for your system. That is usually a few MB: the compiler

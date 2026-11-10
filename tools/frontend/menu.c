@@ -203,7 +203,7 @@ static const struct { const char *label, *help; } HELP[] = {
     {"Updates", "A newer version of Rondo Recomp: what is new, download and install it."},
     {"Download and install", "Setup downloads the new version, puts it in place and rebuilds the game; it restarts."},
     {"Check now", "Ask GitHub for the latest version again."},
-    {"Check at launch", "Ask GitHub (github.com/" "fhclimited/RondoRecomp) for a newer version at each launch."},
+    {"Check at launch", "Ask GitHub (github.com/" "gminustwo/RondoRecomp) for a newer version at each launch."},
     {"Release page", "Open the new version's page on GitHub in your web browser."},
 };
 
