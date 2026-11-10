@@ -1,13 +1,14 @@
 /* RondoRecomp Setup (command line): turns the player's own disc image into rondo.exe (Windows)
  * or rondo (Linux).
  *
- * usage: rondo_setup <disc.zip | disc.cue | folder> [--out DIR] [--sdk DIR] [--zig ZIG]
- *                    [--allow-unknown] [--no-build]
+ * usage: rondo_setup <disc.zip | disc.7z | disc.cue | folder | game.wad | WUP folder>
+ *                    [--keys FILE] [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]
  *        rondo_setup --rebuild [--out DIR] ...   (reuse DIR/game, add DIR/misses.txt, rebuild)
  *        rondo_setup --update [--check]          (the latest release from GitHub: install.c)
  *
  *   1. import    read the zip (or a .cue, or a folder with the unzipped image: its .cue files,
- *                subfolders too), find a CUE sheet whose files are all present
+ *                subfolders too), find a CUE sheet whose files are all present; or a Virtual
+ *                Console release, decrypted with the key the player supplies (vc.c)
  *   2. identify  PC Engine CD signature + boot-sector fingerprint (refuses unknown discs
  *                unless --allow-unknown)
  *   3. extract   to DIR/game (staged in DIR/game.tmp, renamed only after the check passes)
@@ -32,6 +33,7 @@
 #include "../frontend/programs.h"
 #include "../recomp/gen.h"
 #include "setup.h"
+#include "vc.h"
 #include "zip.h"
 
 #define SETUP_VERSION RONDO_VERSION
@@ -541,6 +543,35 @@ static bool code_disc(const char *game, char *out, size_t n)
 
 /* ---- main --------------------------------------------------------------------- */
 
+/* A Virtual Console release (vc.c) rather than a disc image: a .wad or a .7z, or a zip or
+ * folder with a WUP or .wad and no .cue */
+static bool virtual_console(const char *input)
+{
+    if (ends_with(input, ".wad") || ends_with(input, ".7z")) return true;
+    SDL_PathInfo info;
+    bool dir = SDL_GetPathInfo(input, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    if (!dir && !ends_with(input, ".zip")) return false;
+    bool cue = false;
+    if (dir) {
+        int count = 0;
+        char **files = SDL_GlobDirectory(input, "*.cue", SDL_GLOB_CASEINSENSITIVE, &count);
+        cue = files && count > 0;
+        SDL_free(files);
+        if (!cue) {   /* (the pattern is matched against the whole relative path: subfolders too) */
+            files = SDL_GlobDirectory(input, NULL, 0, &count);
+            for (int i = 0; files && i < count && !cue; i++) cue = ends_with(files[i], ".cue");
+            SDL_free(files);
+        }
+    } else {
+        Zip z;
+        char err[256];
+        if (!zip_open(&z, input, err, sizeof err)) return false;
+        for (int i = 0; i < z.n && !cue; i++) cue = ends_with(z.entries[i].name, ".cue");
+        zip_close(&z);
+    }
+    return !cue && vc_detect(input);
+}
+
 static int fail(const char *step)
 {
     say("\nSetup failed while %s:\n  %s\n", step, g_err);
@@ -555,6 +586,7 @@ int setup_main(int argc, char **argv)
         if (!strcmp(argv[i], "--out") && i + 1 < argc) out_arg = argv[++i];
         else if (!strcmp(argv[i], "--sdk") && i + 1 < argc) sdk_arg = argv[++i];
         else if (!strcmp(argv[i], "--zig") && i + 1 < argc) zig_arg = argv[++i];
+        else if (!strcmp(argv[i], "--keys") && i + 1 < argc) vc_keys_file = argv[++i];
         else if (!strcmp(argv[i], "--allow-unknown")) allow_unknown = true;
         else if (!strcmp(argv[i], "--no-build")) do_build = false;
         else if (!strcmp(argv[i], "--rebuild")) rebuild = true;
@@ -569,8 +601,8 @@ int setup_main(int argc, char **argv)
         return setup_update(dir, check);
     }
     if (!input && !rebuild) {
-        fprintf(stderr, "usage: rondo_setup <disc.zip | disc.cue | folder> [--out DIR] [--sdk DIR] [--zig ZIG] "
-                        "[--allow-unknown] [--no-build]\n       rondo_setup --rebuild [--out DIR] [--sdk DIR] [--zig ZIG]\n"
+        fprintf(stderr, "usage: rondo_setup <disc.zip | disc.7z | disc.cue | folder | game.wad | WUP folder> [--keys FILE]\n"
+                        "                   [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]\n       rondo_setup --rebuild [--out DIR] [--sdk DIR] [--zig ZIG]\n"
                         "       rondo_setup --update [--check] [--out DIR]\n");
         return 2;
     }
@@ -605,7 +637,16 @@ int setup_main(int argc, char **argv)
     } else {
         say("RondoRecomp Setup " SETUP_VERSION "\n\n[1/4] Importing %s\n", input);
         SDL_PathInfo info;
-        if (ends_with(input, ".zip")) {
+        bool vc = virtual_console(input);
+        if (vc) {
+            bool need_key = false;
+            if (!vc_import(input, stage, cue, sizeof cue, &need_key)) {
+                remove_tree(stage);
+                fail("importing");
+                return need_key ? 4 : 1;   /* 4: Setup's window asks for the key file */
+            }
+            kind = discid_identify(cue, &fp);
+        } else if (ends_with(input, ".zip")) {
             Zip z;
             if (!zip_open(&z, input, g_err, sizeof g_err)) return fail("opening the zip");
             int cues = 0;
@@ -651,7 +692,7 @@ int setup_main(int argc, char **argv)
                 kind = discid_identify(cue, &fp);
             }
         } else {
-            snprintf(g_err, sizeof g_err, "expected a .zip file, a .cue file or a folder");
+            snprintf(g_err, sizeof g_err, "expected a .zip, .7z, .cue or .wad file, or a folder");
             return fail("importing");
         }
 
@@ -667,7 +708,9 @@ int setup_main(int argc, char **argv)
         DiscLanguage lang = discid_language(cue);
         if (lang == DISC_LANG_UNKNOWN) lang = DISC_LANG_EN;
         say("  %s, %s (fingerprint %016llX)\n", kind == DISC_RONDO ? "Castlevania: Rondo of Blood" : "unknown release",
-            lang_name(lang), (unsigned long long)fp);
+            !vc ? lang_name(lang) : lang == DISC_LANG_JA ? "the Japanese original (from the Virtual Console)"
+                                                        : "English (Konami's translation, from the Virtual Console)",
+            (unsigned long long)fp);
         SDL_CreateDirectory(game);
         if (!migrate_single_disc(game)) {
             remove_tree(stage);

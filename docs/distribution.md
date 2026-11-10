@@ -10,7 +10,8 @@ This is the same model as LASRecomp: tools are shipped, the game-specific code i
 2. Run **RondoRecomp Setup** and choose the zip of their *Castlevania: Rondo of Blood* disc image
    ("Disc zip...", which also takes a .cue file), or the folder it is unzipped in ("Disc
    folder...": every .cue under it is checked where it is, and the first Rondo of Blood disc is
-   copied in).
+   copied in). A .7z of the image works too, and so do the Virtual Console releases (see
+   Virtual Console below).
 3. Setup checks the disc, extracts what it needs, recompiles the game code and produces `rondo.exe`.
 4. From then on: double-click `rondo.exe`.
 
@@ -146,6 +147,100 @@ Linux (in WSL):
 RetroAchievements: the SDK carries rcheevos (`sdk/src/rcheevos`). `sdk/sources.txt` lists its
 sources, plus `-I` (relative to the SDK) and `-D` lines, which Setup passes to the compiler.
 On Windows the game also links `winhttp`.
+
+## Virtual Console
+
+Setup also imports Rondo of Blood from the Wii's and the Wii U's Virtual Console
+(`tools/setup/vc.c`): a `.wad`, or a Wii U title as a WUP (`title.tmd`, `title.tik`,
+`NNNNNNNN.app`), each on its own or in a zip or 7z. A 7z is read with the LZMA SDK's decoder
+(`tools/setup/sevenzip.c`, `third_party/lzma`). The Virtual Console disc becomes an ordinary
+cue sheet in `game/en/`, and from then on nothing tells it from a disc.
+
+**Keys.** Both are encrypted, and the console's common key is the player's to supply.
+RondoRecomp ships no keys. Setup looks for `keys.txt`, `otp.bin`, `keys.bin` and
+`common-key.bin`:
+- next to the input and in the folder above it;
+- next to Setup, and in the AppImage's game folder;
+- in the file `--keys` or `RONDO_KEYS` names, or the one Setup's window asks for.
+
+It tries every 32-hex-digit key in a text file (Cemu's `keys.txt` has hundreds), and every
+16 bytes at a multiple of 4 in a small binary one, such as a Wii U's `otp.bin` or a Wii's
+BootMii `keys.bin`. Each is tried as the common key and as the title key itself. The right
+one decrypts the start of content 0 to the file system's `FST` (Wii U) or the banner's `IMET`
+(Wii). With no key, `rondo_setup` exits with 4, and the window then asks for the file.
+
+**Wii U.** Content 0 is the title's file system. Hashed contents are in 0x10000-byte blocks:
+0x400 bytes of hashes, decrypted with a zero IV, then 0xFC00 bytes of data, whose IV is the
+block's entry in those hashes. The game is `/content/pceemu/pce.pkg`: a u32 length, then
+files, each a u32 size (little-endian), a NUL-terminated name and the data.
+
+**Wii.** The ticket and TMD come after the header and certificates, and then the contents
+(64-byte aligned; IV: the content's index). Each content is checked against the TMD's SHA-1.
+The game is content 5, a U8 archive (an LZ77-compressed one, types 0x10 and 0x11, would do
+too). It holds `KMCD3005.hcd` and the tracks `KMCD3005_NN.bin` and `.ogg`, plus the
+emulator's files: `config.ini`, the manual, and `syscard3P.pce`, the System Card, which
+RondoRecomp doesn't use. For the key test, the largest content's first block must decrypt
+to the U8 or LZ77 header. Content 0 starts with the title's name (`DRACULAX.1002031`), not
+the usual banner header.
+
+**Without a key**, a `.wad` that Dolphin has installed is read from Dolphin's Wii storage.
+Dolphin keeps installed titles decrypted, in `title/<id high>/<id low>/content/`. Setup
+looks for the storage:
+- where `NANDRootPath` in Dolphin's `Dolphin.ini` puts it;
+- otherwise in the usual places: `%APPDATA%\Dolphin Emulator\Wii`,
+  `Documents\Dolphin Emulator\Wii`, `~/.local/share/dolphin-emu/Wii`, and Flatpak's
+  `~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii`.
+
+The contents are checked against the WAD's TMD. The player can also choose such a
+`content` folder (`title.tmd` with a Wii title id) with "Disc folder...".
+
+**The disc.** Both have a track list, `CDROM.hcd`, with one line per track:
+`track02,code ,track02.bin,004040,010299` gives the number, `audio` or `code`, the file, the
+start as LBA + 150, and the length in sectors. The tracks themselves are:
+- data tracks: zlib blocks of 128 2048-byte sectors, with a u32 count, then count × (u32
+  offset, u32 size);
+- audio tracks: Ogg Vorbis at 32 kHz (stb_vorbis, `third_party/stb_vorbis`).
+
+Setup writes:
+- `Track NN.iso` for each data track (`MODE1/2048`);
+- `Track NN.wav` for each audio track, resampled to 44.1 kHz with a windowed sinc
+  interpolation (441 phases from 32 kHz);
+- a cue sheet whose `PREGAP`s and `INDEX`es put every track where it is on the disc.
+
+Lengths are cut at the next track's start, because the lists let some tracks overlap.
+
+The audio track after a data track has a 2-second pregap, which the two lists show
+differently:
+- **Wii U:** the track starts where the data ends, so its first 150 sectors are the pregap
+  (`INDEX 00`, then `INDEX 01` at 00:02:00).
+- **Wii:** a gap comes before the track, so the gap is the `PREGAP`.
+
+Either way the track starts where it does on the disc.
+
+On both discs the second data track (22) is a copy of track 2's first 10,000 sectors. The
+Wii leaves it out, and the Wii U has the untranslated one, so Setup makes track 22 from
+track 2. An audio track whose file is missing becomes silence. The Wii lacks track 1, the
+warning a CD player plays, which the game never plays.
+
+What the releases hold (checked against the discs):
+- **Wii U:** the English translation. Its track 2 is the English disc's to the sector: the
+  "English translation" disc image is Konami's Virtual Console translation, and the import
+  matches that disc in all its data. So the disc fingerprint, the recompiled code and
+  RetroAchievements' hash (game 4855) are the English disc's.
+- **Wii (the USA and the European `.wad`):** the original Japanese game, untranslated. No
+  translation is anywhere in the title, not in the emulator either. Track 2 is the
+  Japanese disc's to the sector, and the import matches that disc in all its data. The two
+  releases differ only in the manual, `TITLE.TXT` and `config.ini`.
+- **The audio:** Ogg Vorbis, 32 kHz on the Wii U and 48 kHz on the Wii. The Wii U's matches
+  the disc within 3 frames (40 ms) for most tracks, with a correlation of 0.98 to 0.99.
+  Track 3 starts about 0.7 s early, and tracks 20 and 21 are slightly re-edited.
+
+The full set of tests (`--test-achievements`, `--autotest`, `--autotest-start`,
+`--autotest-features`) gives the same results as with the discs.
+
+The WAD's decryption was tested on a WAD re-encrypted under a made-up key, since there's no
+Wii key at hand. Its own SHA-1s check the result. The Wii releases themselves were tested
+through Dolphin's installed copies.
 
 ## Updates
 

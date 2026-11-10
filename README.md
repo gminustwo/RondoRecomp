@@ -42,6 +42,10 @@ Findings so far: [docs/findings.md](docs/findings.md).
   hardcore mode through RetroAchievements' own client library (rcheevos), for both discs.
 - Windows and Linux (x86-64, glibc 2.35 or newer: the Steam Deck, Ubuntu 22.04, Debian 12,
   Fedora 36, Arch and later).
+- Setup takes the disc image zipped, as a 7z or unzipped, or the Virtual Console releases:
+  the Wii's `.wad` (the Japanese game) and the Wii U's title (WUP, the English translation),
+  with the console key the player supplies, or a `.wad` installed in Dolphin. See
+  [docs/distribution.md](docs/distribution.md#virtual-console).
 - Updates from the game itself: the start screen says when a new release is out, and its
   Updates page downloads it (a few MB on Windows, the new AppImage on Linux), checks it,
   installs it, rebuilds the game and restarts it. See [docs/distribution.md](docs/distribution.md#updates).
@@ -51,7 +55,7 @@ Findings so far: [docs/findings.md](docs/findings.md).
 Download the release (`RondoRecomp-<version>-windows-x64.zip`, or
 `RondoRecomp-<version>-x86_64.AppImage` for Linux and the Steam Deck), run
 `RondoRecomp Setup` (on Linux, the AppImage), choose your own disc image (zipped, or the
-folder it is unzipped in), then click Play. On the Steam Deck, add the AppImage to Steam as a
+folder it is unzipped in) or Virtual Console release, then click Play. On the Steam Deck, add the AppImage to Steam as a
 non-Steam game. See [docs/PLAYER_README.txt](docs/PLAYER_README.txt) and
 [docs/distribution.md](docs/distribution.md).
 

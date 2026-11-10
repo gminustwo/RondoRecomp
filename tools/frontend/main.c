@@ -486,6 +486,12 @@ static void count_end(Menu *m, Settings *s)
 
 int main(int argc, char **argv)
 {
+    /* the test runs (--autotest...) are silent: the sound is made as usual, for SDL's dummy
+     * driver (RONDO_TEST_AUDIO=1 to hear them) */
+    for (int i = 1; i < argc; i++)
+        if ((!strncmp(argv[i], "--autotest", 10) || !strcmp(argv[i], "--test-achievements")) &&
+            !SDL_getenv("RONDO_TEST_AUDIO"))
+            SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -524,6 +530,7 @@ int main(int argc, char **argv)
     Settings set;
     settings_load(&set, settings_path);
     bool test_mode = autotest || features_dir || autotest_start || test_ach || update_dir;
+    if (test_mode) TLOG("audio driver: %s\n", SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none");
     if (test_mode) {   /* fixed options; nothing is saved */
         settings_default(&set);
         if (features_dir) {

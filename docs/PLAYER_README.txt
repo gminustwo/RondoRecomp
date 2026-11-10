@@ -8,10 +8,12 @@ provide your own disc image.
 What you need
 -------------
 Your disc image: the .cue file together with the track files it lists (.bin, .img, .iso
-and/or .wav), either zipped (the files may be inside a folder in the zip) or unzipped in a
-folder of their own.
+and/or .wav), either zipped (the files may be inside a folder in the zip; a .7z works
+too) or unzipped in a folder of their own.
 Either disc works: the original Japanese release (Akumajou Dracula X: Chi no Rondo) or
 the English fan translation. With both, you can switch languages in the game.
+The Virtual Console releases work too (see Virtual Console below): the Wii's .wad (the
+Japanese game) and the Wii U's title (WUP, the English translation).
 
 How to use it
 -------------
@@ -49,6 +51,32 @@ On the Steam Deck:
    your library under Non-Steam.
 Keep the AppImage where it is once it is in Steam: Steam starts it from there, and updates
 replace it there.
+
+Virtual Console (Wii and Wii U)
+-------------------------------
+Setup also takes Rondo of Blood as Nintendo sold it for the Wii and the Wii U:
+- the Wii's .wad (the USA or the European release). This is the original Japanese game,
+  untranslated, as the Wii sold it everywhere: it is installed as the Japanese disc.
+- the Wii U's title, as a WUP: a folder with title.tmd, title.tik and its .app files, or a
+  zip or 7z with that folder in it. This is Konami's English translation: it is installed
+  as the English disc.
+Choose the .wad, zip or 7z with "Disc zip...", or the WUP folder with "Disc folder...".
+Both are encrypted with their console's key, which RondoRecomp does not include. Setup
+looks next to the file you chose (and in the folder above it), and next to Setup, for:
+- keys.txt: keys written as 32 hex digits, one per line, as in Cemu's keys.txt (the Wii
+  U common key for a WUP; the Wii common key for a .wad);
+- otp.bin, dumped from your Wii U: it holds both keys;
+- keys.bin, from a NAND backup of your Wii (BootMii).
+If none is there, Setup's window asks you to choose the file. On the command line:
+rondo_setup <game.wad | WUP folder | .zip | .7z> --keys <file>.
+A .wad needs no key if you have installed it in Dolphin (Tools, Install WAD...): Setup
+finds it there, decrypted, using Dolphin's own settings for where its Wii storage is. You
+can also choose that installed title's folder with "Disc folder..." (in Dolphin's Wii
+folder: title/00010001/5141504e/content for the USA release).
+The Virtual Console's CD audio is compressed (Ogg Vorbis: 48 kHz on the Wii, 32 kHz on the
+Wii U); Setup converts it to the 44.1 kHz the game plays, so it sounds as on the Wii or Wii
+U, not quite as the disc. The Wii release leaves out the disc's first track (the warning a
+CD player would play), which the game never plays.
 The Deck's controls are an Xbox controller to the game: View is Back, Menu is Start, L1 and
 R1 are LB and RB, L2 and R2 are LT and RT. Save states as Back + RB work the same way (View +
 R1). Options, saves and states are kept in ~/.local/share/RondoRecomp/RondoRecomp/.
@@ -225,8 +253,9 @@ natively in the last session.
 
 Command line
 ------------
-rondo_setup.exe <disc.zip | disc.cue | folder>
-                                          the same steps without a window
+rondo_setup.exe <disc.zip | disc.7z | disc.cue | folder | game.wad> [--keys <file>]
+                                          the same steps without a window (--keys: the
+                                          key file for a Virtual Console release)
 rondo_setup.exe --rebuild                 recompile again with misses.txt
 rondo_setup.exe --update                  install the latest version from GitHub (--check:
                                           only say whether there is one)

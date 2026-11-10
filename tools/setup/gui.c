@@ -11,6 +11,7 @@
 #include "../frontend/http.h"
 #include "../frontend/programs.h"
 #include "../frontend/update.h"
+#include "vc.h"
 
 int setup_main(int argc, char **argv);
 extern void (*setup_line_hook)(const char *text);
@@ -108,12 +109,27 @@ static void start(int mode)
     else SDL_SetAtomicInt(&state, FAILED);
 }
 
+static SDL_AtomicInt key_asked;   /* a Virtual Console import needed a key: asked for once */
+
 static void SDLCALL on_pick(void *userdata, const char *const *files, int filter)
 {
     (void)userdata;
     (void)filter;
     if (!files || !files[0]) return;                 /* cancelled */
     snprintf(input_path, sizeof input_path, "%s", files[0]);
+    SDL_SetAtomicInt(&key_asked, 0);
+    start(MODE_IMPORT);
+}
+
+/* the key file the player chose (vc.h): the same import again, with it */
+static void SDLCALL on_key(void *userdata, const char *const *files, int filter)
+{
+    (void)userdata;
+    (void)filter;
+    static char key_path[1024];
+    if (!files || !files[0]) return;
+    snprintf(key_path, sizeof key_path, "%s", files[0]);
+    vc_keys_file = key_path;
     start(MODE_IMPORT);
 }
 
@@ -185,6 +201,12 @@ int main(int argc, char **argv)
         int st = SDL_GetAtomicInt(&state);
         /* the rebuild the AppImage asked for is done: on to the game */
         if (auto_rebuild && st == DONE && run_mode == MODE_REBUILD && play()) break;
+        /* a Virtual Console release that no key found opens: ask for the key file, once */
+        if (st == FAILED && run_mode == MODE_IMPORT && run_result == 4 && SDL_CompareAndSwapAtomicInt(&key_asked, 0, 1)) {
+            static const SDL_DialogFileFilter keys[] = {
+                {"Key file (keys.txt, otp.bin, keys.bin)", "txt;bin"}, {"All files", "*"}};
+            SDL_ShowOpenFileDialog(on_key, NULL, win, keys, 2, NULL, false);
+        }
         bool have_game = exists("game"), have_exe = exists(GAME_PROGRAM);
         http_poll();
         const UpdateInfo *news = NULL;
@@ -216,7 +238,7 @@ int main(int argc, char **argv)
                     if (!hit(&buttons[i], ev.button.x, ev.button.y)) continue;
                     if (buttons[i].id == B_CHOOSE) {
                         static const SDL_DialogFileFilter filters[] = {
-                            {"Disc image (zip or cue)", "zip;cue"}, {"All files", "*"}};
+                            {"Disc image (zip, 7z or cue), Wii VC (wad)", "zip;7z;cue;wad"}, {"All files", "*"}};
                         SDL_ShowOpenFileDialog(on_pick, NULL, win, filters, 2, NULL, false);
                     } else if (buttons[i].id == B_FOLDER) {
                         SDL_ShowOpenFolderDialog(on_pick, NULL, win, NULL, false);
@@ -268,6 +290,9 @@ int main(int argc, char **argv)
             SDL_RenderDebugText(ren, 24, 200, "Rebuild: recompile again, including code " GAME_PROGRAM " recorded");
             SDL_RenderDebugText(ren, 24, 212, "while you played (misses.txt).");
             SDL_RenderDebugText(ren, 24, 236, "No game files are included with RondoRecomp.");
+            SDL_RenderDebugText(ren, 24, 260, "Virtual Console: a Wii .wad (Japanese) or a Wii U title (English: its");
+            SDL_RenderDebugText(ren, 24, 272, "folder, a zip or a 7z). Encrypted: Setup needs your console's key file");
+            SDL_RenderDebugText(ren, 24, 284, "(keys.txt as Cemu's, otp.bin, keys.bin), or a .wad installed in Dolphin.");
         } else {
             int first = n_lines > 30 ? n_lines - 30 : 0;
             float y = 52;
@@ -298,7 +323,12 @@ int main(int argc, char **argv)
                                               : run_result == 3        ? "This is the latest version."
                                                                        : "Updated. Click Play.");
         }
-        if (st == FAILED) { SDL_SetRenderDrawColor(ren, 240, 120, 110, 255); SDL_RenderDebugText(ren, 24, 324, "Setup did not finish; see the messages above."); }
+        if (st == FAILED) {
+            SDL_SetRenderDrawColor(ren, 240, 120, 110, 255);
+            SDL_RenderDebugText(ren, 24, 324, run_mode == MODE_IMPORT && run_result == 4
+                                                  ? "Setup needs your console's key file: choose it (Setup then goes on)."
+                                                  : "Setup did not finish; see the messages above.");
+        }
         for (int i = 0; i < nb; i++) draw_button(ren, &buttons[i], hit(&buttons[i], mx, my));
         SDL_RenderPresent(ren);
         SDL_Delay(16);
