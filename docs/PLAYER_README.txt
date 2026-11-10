@@ -51,6 +51,9 @@ On the Steam Deck:
    your library under Non-Steam.
 Keep the AppImage where it is once it is in Steam: Steam starts it from there, and updates
 replace it there.
+To add the other disc later, choose Setup on the game's start screen: the game closes and
+Setup's window opens in its place. In Gaming Mode there may be no file dialog for "Disc
+zip..." (Setup then says so): add discs in Desktop Mode.
 
 Virtual Console (Wii and Wii U)
 -------------------------------

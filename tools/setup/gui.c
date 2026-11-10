@@ -7,6 +7,9 @@
 #include <SDL3/SDL_main.h>
 #include <stdio.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>   /* execv */
+#endif
 
 #include "../frontend/http.h"
 #include "../frontend/programs.h"
@@ -111,11 +114,23 @@ static void start(int mode)
 
 static SDL_AtomicInt key_asked;   /* a Virtual Console import needed a key: asked for once */
 
+/* a file dialog that could not open (NULL from SDL; an empty list is a cancel): said under
+ * the buttons. On a Steam Deck in Game Mode there may be none. */
+static char dialog_error[160];
+
+static void dialog_failed(void)
+{
+    SDL_Log("file dialog: %s", SDL_GetError());
+    snprintf(dialog_error, sizeof dialog_error, "No file dialog could open. On a Steam Deck, add discs in Desktop Mode.");
+}
+
 static void SDLCALL on_pick(void *userdata, const char *const *files, int filter)
 {
     (void)userdata;
     (void)filter;
-    if (!files || !files[0]) return;                 /* cancelled */
+    if (!files) { dialog_failed(); return; }
+    dialog_error[0] = 0;
+    if (!files[0]) return;                           /* cancelled */
     snprintf(input_path, sizeof input_path, "%s", files[0]);
     SDL_SetAtomicInt(&key_asked, 0);
     start(MODE_IMPORT);
@@ -127,7 +142,8 @@ static void SDLCALL on_key(void *userdata, const char *const *files, int filter)
     (void)userdata;
     (void)filter;
     static char key_path[1024];
-    if (!files || !files[0]) return;
+    if (!files) { dialog_failed(); return; }
+    if (!files[0]) return;
     snprintf(key_path, sizeof key_path, "%s", files[0]);
     vc_keys_file = key_path;
     start(MODE_IMPORT);
@@ -159,17 +175,29 @@ static void draw_button(SDL_Renderer *r, const Button *b, bool hover)
     SDL_RenderDebugText(r, tx, b->y + (b->h - 8) / 2, b->label);
 }
 
-/* the game; from the AppImage, the AppImage again, which starts the game it built (and is the
- * new one after an update) */
+/* The game; from the AppImage, the AppImage again, which starts the game it built (and is
+ * the new one after an update). On Windows it starts and Setup quits; on Linux Setup becomes
+ * the game once its window is closed (play_after, exec): the same process, which Steam keeps
+ * track of (it closes what a game leaves running when the game's own process ends). */
+#ifndef _WIN32
+static char play_after[1100];
+#endif
+static const char *play_arg;   /* --autotest-play: the game's --autotest */
+
 static bool play(void)
 {
     char exe[1100];
     if (rondo_appimage()) snprintf(exe, sizeof exe, "%s", rondo_appimage());
     else snprintf(exe, sizeof exe, "%s" GAME_PROGRAM, base_dir);
-    const char *args[] = {exe, NULL};
+#ifdef _WIN32
+    const char *args[] = {exe, play_arg, NULL};
     SDL_Process *p = SDL_CreateProcess(args, false);
     if (!p) return false;
     SDL_DestroyProcess(p);
+#else
+    if (!SDL_GetPathInfo(exe, NULL)) return false;
+    snprintf(play_after, sizeof play_after, "%s", exe);
+#endif
     return true;
 }
 
@@ -177,8 +205,13 @@ int main(int argc, char **argv)
 {
     /* --rebuild: start rebuilding at once (the AppImage, when it is newer than the game) */
     bool auto_rebuild = false;
-    for (int i = 1; i < argc; i++)
+    /* --autotest-play (the game's --autotest-setup): note this process next to the game, then
+     * Play, which runs the game's --autotest */
+    bool autotest_play = false;
+    for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--rebuild")) auto_rebuild = true;
+        if (!strcmp(argv[i], "--autotest-play")) { autotest_play = true; play_arg = "--autotest"; }
+    }
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
     /* where the game is built: this folder, or the AppImage's own (programs.h) */
     snprintf(base_dir, sizeof base_dir, "%s", rondo_home_dir());
@@ -201,6 +234,21 @@ int main(int argc, char **argv)
         int st = SDL_GetAtomicInt(&state);
         /* the rebuild the AppImage asked for is done: on to the game */
         if (auto_rebuild && st == DONE && run_mode == MODE_REBUILD && play()) break;
+        static int frames;
+        if (autotest_play && ++frames == 30) {   /* the window has been up for half a second */
+            char log_path[1100], line[200];
+            snprintf(log_path, sizeof log_path, "%ssetup_autotest.log", base_dir);
+            size_t len = 0;
+            char *before = SDL_LoadFile(log_path, &len);
+#ifdef _WIN32
+            snprintf(line, sizeof line, "%sSetup: window up, playing\n", before ? before : "");
+#else
+            snprintf(line, sizeof line, "%sSetup: process %d, window up, playing\n", before ? before : "", (int)getpid());
+#endif
+            SDL_free(before);
+            SDL_SaveFile(log_path, line, strlen(line));
+            if (play()) break;
+        }
         /* a Virtual Console release that no key found opens: ask for the key file, once */
         if (st == FAILED && run_mode == MODE_IMPORT && run_result == 4 && SDL_CompareAndSwapAtomicInt(&key_asked, 0, 1)) {
             static const SDL_DialogFileFilter keys[] = {
@@ -323,6 +371,10 @@ int main(int argc, char **argv)
                                               : run_result == 3        ? "This is the latest version."
                                                                        : "Updated. Click Play.");
         }
+        if (dialog_error[0] && st != RUNNING) {
+            SDL_SetRenderDrawColor(ren, 240, 120, 110, 255);
+            SDL_RenderDebugText(ren, 24, 312, dialog_error);
+        }
         if (st == FAILED) {
             SDL_SetRenderDrawColor(ren, 240, 120, 110, 255);
             SDL_RenderDebugText(ren, 24, 324, run_mode == MODE_IMPORT && run_result == 4
@@ -334,5 +386,13 @@ int main(int argc, char **argv)
         SDL_Delay(16);
     }
     SDL_Quit();
+#ifndef _WIN32
+    if (play_after[0]) {   /* play(): Setup becomes the game */
+        const char *args[] = {play_after, play_arg, NULL};
+        execv(play_after, (char *const *)args);
+        fprintf(stderr, "cannot start %s\n", play_after);
+        return 1;
+    }
+#endif
     return 0;
 }

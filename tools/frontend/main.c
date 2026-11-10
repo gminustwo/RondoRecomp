@@ -273,7 +273,16 @@ static void start_screen_info(Menu *m, const Session *ss, const Settings *set, c
     snprintf(m->info[1], sizeof m->info[1], "%s", recomp_build_id);
 }
 
-/* Start screen: RondoRecomp Setup (next to rondo.exe) adds a disc or rebuilds. */
+/* Start screen: RondoRecomp Setup (next to rondo.exe) adds a disc or rebuilds. On Windows it
+ * starts and the game quits (so it can be rebuilt). On Linux the game becomes Setup once it
+ * has quit (setup_after, exec): the same process, so Steam keeps track of it (it closes what a
+ * game leaves running), and the AppImage stays mounted (a new process would not keep it:
+ * SDL_CreateProcess closes the files it would inherit). */
+#ifndef _WIN32
+static char setup_after[1100];
+#endif
+static const char *setup_arg;   /* --autotest-setup: Setup's --autotest-play */
+
 static bool open_setup(char *status, size_t n)
 {
     char exe[1100];
@@ -282,13 +291,17 @@ static bool open_setup(char *status, size_t n)
         snprintf(status, n, SETUP_PROGRAM " is not next to " GAME_PROGRAM);
         return false;
     }
-    const char *args[] = {exe, NULL};
+#ifdef _WIN32
+    const char *args[] = {exe, setup_arg, NULL};
     SDL_Process *proc = SDL_CreateProcess(args, false);
     if (!proc) {
         snprintf(status, n, "Cannot start Setup: %.80s", SDL_GetError());
         return false;
     }
     SDL_DestroyProcess(proc);      /* it keeps running; rondo.exe quits so it can be rebuilt */
+#else
+    snprintf(setup_after, sizeof setup_after, "%s", exe);
+#endif
     return true;
 }
 
@@ -506,6 +519,10 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--play")) play_now = true;
         else if (!strcmp(argv[i], "--autotest-features") && i + 1 < argc) features_dir = argv[++i];
         else if (!strcmp(argv[i], "--autotest-start")) autotest_start = true;
+        /* --autotest-setup: the start screen's Setup at once; the game becomes Setup (Linux),
+         * whose --autotest-play then plays: the game's --autotest. Each notes its process in
+         * setup_autotest.log, next to the game. */
+        else if (!strcmp(argv[i], "--autotest-setup")) setup_arg = "--autotest-play";
         else if (!strcmp(argv[i], "--test-achievements")) test_ach = true;   /* the discs' hashes, asked of the server */
         /* --autotest-update DIR: the start screen's notice, the Updates page, Download and
          * install (with RONDO_UPDATE_URL / RONDO_UPDATE_FROM), then the new game's --autotest */
@@ -518,7 +535,7 @@ int main(int argc, char **argv)
     locate_profile_dir(pref_dir, sizeof pref_dir);
     char settings_path[1100], states_dir[1100];
     snprintf(settings_path, sizeof settings_path, "%ssettings.ini", pref_dir);
-    if (autotest || features_dir || autotest_start || test_ach || update_dir) {
+    if (autotest || features_dir || autotest_start || test_ach || update_dir || setup_arg) {
         /* test runs keep their state files apart from the player's */
         no_save_files = true;
         size_t l = strlen(pref_dir);
@@ -529,7 +546,7 @@ int main(int argc, char **argv)
     SDL_CreateDirectory(states_dir);
     Settings set;
     settings_load(&set, settings_path);
-    bool test_mode = autotest || features_dir || autotest_start || test_ach || update_dir;
+    bool test_mode = autotest || features_dir || autotest_start || test_ach || update_dir || setup_arg;
     if (test_mode) TLOG("audio driver: %s\n", SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none");
     if (test_mode) {   /* fixed options; nothing is saved */
         settings_default(&set);
@@ -653,6 +670,20 @@ int main(int argc, char **argv)
     long t_ach_frame = -1;
     bool t_ach_state = false;
 
+    if (setup_arg) {
+        char line[200], log_path[1100];
+        snprintf(log_path, sizeof log_path, "%ssetup_autotest.log", rondo_home_dir());
+#ifdef _WIN32
+        snprintf(line, sizeof line, "game: opening Setup\n");
+#else
+        snprintf(line, sizeof line, "game: process %d, opening Setup\n", (int)getpid());
+#endif
+        SDL_SaveFile(log_path, line, strlen(line));
+        if (open_setup(menu.status, sizeof menu.status)) running = false;
+    }
+#ifndef _WIN32
+    if (autotest) TLOG("process: %d\n", (int)getpid());
+#endif
     while (running) {
         if (autotest_start) {          /* phases wait for the skips to finish, at any speed */
             t_start_loops++;
@@ -1455,6 +1486,15 @@ int main(int argc, char **argv)
         const char *none[] = {NULL}, *autotest_args[] = {"--autotest", NULL};
         relaunch(update_dir ? autotest_args : none);   /* returns on Windows (and if it fails) */
     }
+#ifndef _WIN32
+    if (setup_after[0]) {   /* open_setup: the game becomes Setup */
+        SDL_Quit();
+        const char *argv[] = {setup_after, setup_arg, NULL};
+        execv(setup_after, (char *const *)argv);
+        fprintf(stderr, "cannot start %s\n", setup_after);
+        return 1;
+    }
+#endif
     SDL_Quit();
     return 0;
 }

@@ -26,6 +26,16 @@ ls -l home/rondo home/libSDL3.so.0 2>&1 | cut -c1-10,40-
 echo "== --autotest through the AppImage: exit $?"
 grep -E "^build|native|autotest" home/rondo.log
 
+# the start screen's Setup and Setup's Play: the game becomes Setup, which becomes the game
+# again, all in one process (Steam keeps track of it; the AppImage stays mounted)
+rm -f home/setup_autotest.log home/rondo.log
+timeout 300 ./$APP --autotest-setup > /dev/null 2>&1
+echo "== game -> Setup -> game: exit $?"
+cat home/setup_autotest.log 2>/dev/null || echo "NO setup_autotest.log"
+grep -E "^process|^build|native" home/rondo.log 2>/dev/null || echo "THE GAME DID NOT COME BACK"
+pids=$( (grep -o "process [0-9]*" home/setup_autotest.log; grep -o "^process: [0-9]*" home/rondo.log) 2>/dev/null | grep -o "[0-9]*" | sort -u | wc -l)
+[ "$pids" = 1 ] && echo "one process throughout" || echo "PROCESSES DIFFER ($pids)"
+
 # the update: this AppImage, offered as a newer release
 SUM=$(sha256sum srv/$APP | cut -d' ' -f1)
 SIZE=$(stat -c %s srv/$APP)

@@ -134,6 +134,16 @@ window. If the game was built by another version (`build/version.txt`, which Set
 it opens Setup's window, which rebuilds and then plays. `--setup` opens Setup's window, and
 `--setup-cli` runs `rondo_setup`.
 
+On Linux the game and Setup's window hand over in one process: the start screen's Setup
+quits the game (saving as usual), then `exec`s Setup, and Setup's Play `exec`s the game (or
+the AppImage). A new process would not work. Steam closes whatever a game leaves running
+when its own process ends, and the AppImage stays mounted only while a process holds the
+pipe its runtime opened. `SDL_CreateProcess` closes the files a child would inherit, so a
+child loses that hold. `rondo --autotest-setup` checks this: the game opens Setup, whose
+`--autotest-play` plays the game's `--autotest`. Each notes its process id in
+`setup_autotest.log`, and `tools/updtest/appimage.sh` checks they are the same. On Windows
+Setup starts as a process of its own, and the same test runs there too.
+
 Setup builds `rondo` with `zig cc -target x86_64-linux-gnu.2.35`. It links against glibc
 2.35's symbols whatever the machine has, plus `-D_DEFAULT_SOURCE`, because rcheevos uses
 `strdup` and `strcasecmp` and glibc hides them under `-std=c11`. The tests run the same on
