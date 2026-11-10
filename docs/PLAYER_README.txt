@@ -84,8 +84,8 @@ The Updates page shows what is new; "Download and install" does the rest:
 If anything goes wrong, the old version is put back and the page says what happened.
 "Check at launch" (on by default) turns the question to GitHub off; "Check now" asks
 anyway. RondoRecomp Setup's window also offers "Update to ..." when there is a new version,
-and on the command line: rondo_setup --update. This works from version 1.1 on: a copy of
-1.0 or older has to be replaced by hand once.
+and on the command line: rondo_setup --update. Versions before 1.0 have no updater: replace
+one of those by hand once.
 
 Controls
 --------

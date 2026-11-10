@@ -133,7 +133,7 @@ On Windows the game also links `winhttp`.
 
 ## Updates
 
-From 1.1, an installation updates itself from the GitHub releases
+From 1.0, an installation updates itself from the GitHub releases
 (`tools/frontend/update.h`, `tools/setup/install.c`):
 
 1. **Check.** The game asks GitHub's API for the latest release when it starts

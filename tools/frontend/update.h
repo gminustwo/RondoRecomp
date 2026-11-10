@@ -25,7 +25,7 @@
 #endif
 
 typedef struct UpdateInfo {
-    char version[32];        /* "1.1" (the release's tag without its v) */
+    char version[32];        /* "1.2" (the release's tag without its v) */
     char page[256];          /* the release's web page */
     char asset[160];         /* the package for this system: its name, address, size, SHA-256 */
     char url[512];
