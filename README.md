@@ -2,9 +2,9 @@
 
 Static recompilation of *Castlevania: Rondo of Blood* (PC Engine Super CD-ROM²) into a native PC application.
 
-## Support Platforms
+## Supported Platforms
 
-Currently Windows, Linux x86 (Steamdeck).
+Currently Windows, Linux x86 (Steam Deck).
 
 > If you want support for a different platform and want to contribute, please feel free to put in a pull request to add that support in.
 
@@ -24,7 +24,7 @@ Virtual Console releases (you supply the console key, which the game doesn't inc
 
 If you install one Japanese source and one English source, the Language option in the game switches between them. RetroAchievements counts both as the same game.
 
-All the discs share the same track layout and boot sector. The CD audio is found by its exact position on the disc, so a disc image with a different track layout won't work. **The docs don't list any other versions, such as the PSP's Dracula X Chronicles or the PS4's Castlevania Requiem, so treat those as unsupported.**
+All the discs share the same track layout and boot sector. The CD audio is found by its exact position on the disc, so a disc image with a different track layout won't work. **Other versions, such as the PSP's Dracula X Chronicles or the PS4's Castlevania Requiem, aren't supported.**
 
 > [!IMPORTANT]
 > **No game data is included or committed.** Tools read your own disc image (CUE sheet with
