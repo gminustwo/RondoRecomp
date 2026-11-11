@@ -1,10 +1,42 @@
 # RondoRecomp
 
-Work in progress: static recompilation of *Castlevania: Rondo of Blood* (PC Engine Super CD-ROM²)
-into a native PC application.
+Static recompilation of *Castlevania: Rondo of Blood* (PC Engine Super CD-ROM²) into a native PC application.
 
-**No game data is included or committed.** Tools read your own disc image (CUE sheet with
+## Support Platforms
+
+Currently Windows, Linux x86 (Steamdeck).
+
+> If you want support for a different platform and want to contribute, please feel free to put in a pull request to add that support in.
+
+## Issues
+If you have any bugs to report or issues, please use the issues tab to request what's happening. Include as much info as you can. "Game won't work for me" with no info will be closed.
+
+## Game Versions Supported
+RondoRecomp works with four releases of *Rondo of Blood*:
+
+PC Engine disc images (a .cue file plus its track files: .bin, .img, .iso and/or .wav; zipped, 7z'd or in a folder)
+- The original Japanese release, Akumajou Dracula X: Chi no Rondo, for the PC Engine Super CD-ROM².
+- The English fan translation of that disc. Both the 2012 version and the 2024 redump-style version work.
+
+Virtual Console releases (you supply the console key, which the game doesn't include)
+- The Wii .wad, either the USA or the European release. It's the untranslated Japanese game, so it installs as the Japanese disc. If you've already installed it in Dolphin, no key is needed.
+- The Wii U title (WUP). This is Konami's English translation, so it installs as the English disc.
+
+If you install one Japanese source and one English source, the Language option in the game switches between them. RetroAchievements counts both as the same game.
+
+All the discs share the same track layout and boot sector. The CD audio is found by its exact position on the disc, so a disc image with a different track layout won't work. **The docs don't list any other versions, such as the PSP's Dracula X Chronicles or the PS4's Castlevania Requiem, so treat those as unsupported.**
+
+> [!IMPORTANT]
+> **No game data is included or committed.** Tools read your own disc image (CUE sheet with
 ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ignored.
+
+## Features
+- Rewinding up to 30 min that works like the Konami Castlevania collections
+- Compatible with the original PC Engine version, English patched, Wii, and Wii U versions
+- Full suite of video options including filters and screen effects
+- Save stating
+- Cheats
+- RetroAchievements
 
 ## Analysis tools
 
