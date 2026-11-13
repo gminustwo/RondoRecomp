@@ -1,13 +1,14 @@
 /* What each control does: the actions the player can rebind (Controls page), each with a
  * controller button and a key. Moving (d-pad, left stick, arrows), the menus' own keys,
- * F6 / F7 (state slot), F11 (fullscreen) and Esc (menu) are fixed. */
+ * F6 / F7 (state slot), F11 (fullscreen) and Esc (menu) are fixed; keys of the player's own
+ * can move as well (the Move actions: WASD, say). */
 #pragma once
 
 #include <stdbool.h>
 
 enum {
     ACT_JUMP, ACT_ATTACK, ACT_SUB, ACT_CRASH, ACT_FLIP, ACT_RUN, ACT_PAUSE, ACT_MENU, ACT_REWIND,
-    ACT_SAVE, ACT_LOAD, ACT_COUNT
+    ACT_SAVE, ACT_LOAD, ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT, ACT_COUNT
 };
 
 /* A controller binding: an SDL_GamepadButton, BIND_LT / BIND_RT for the triggers, a
@@ -26,6 +27,8 @@ typedef struct ActionInfo {
     const char *key;       /* in settings.ini: bind_pad_<key>, bind_key_<key> */
     int pad, kbd;          /* the defaults */
     bool clearable;        /* may be left without a control (the game can be played without it) */
+    bool keys_only;        /* a key in addition to the arrows (Move); a controller moves with
+                            * its d-pad and left stick */
 } ActionInfo;
 
 const ActionInfo *bind_action(int act);

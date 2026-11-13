@@ -10,8 +10,11 @@
  *
  * Hardcore mode is RetroAchievements' stricter mode: while it is on (and a game's
  * achievements are loaded), loading save states, rewind, the cheats and Richter's run are
- * off; switching it on restarts the game. Server requests run on threads of their own
- * (http.h), so a slow connection never holds up the game. */
+ * off; switching it on restarts the game. The server decides whether this client's hardcore
+ * unlocks count: until RetroAchievements registers RondoRecomp it records them as softcore
+ * (its "Warning: Unknown Emulator" notice), so the achievements run as softcore and say so,
+ * while hardcore's rules stay on. Server requests run on threads of their own (http.h), so
+ * a slow connection never holds up the game. */
 #pragma once
 
 #include <SDL3/SDL.h>
@@ -41,7 +44,7 @@ void ach_frame(void);
  * a logout), so they are saved. */
 bool ach_update(void);
 
-bool ach_hardcore(void);          /* hardcore mode in effect: no loading states, rewind or cheats */
+bool ach_hardcore(void);          /* hardcore mode's rules in effect: no loading states, rewind or cheats */
 bool ach_take_reset(void);        /* the library asked for a restart (hardcore was switched on) */
 
 /* Save states: the achievements' progress (hit counts) is kept next to the state file. */

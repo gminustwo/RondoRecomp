@@ -104,7 +104,10 @@ static const Item CHEAT_ITEMS[] = {
 };
 static const Item CONTROL_ITEMS[] = {
     {IT_TEXT, "\tController\tKeyboard", 0, 0, NULL, 0, 0, 0},
-    {IT_TEXT, "Move\tD-pad / stick\tArrows", 0, 0, NULL, 0, 0, 0},
+    BIND("Move up", ACT_UP),
+    BIND("Move down", ACT_DOWN),
+    BIND("Move left", ACT_LEFT),
+    BIND("Move right", ACT_RIGHT),
     BIND("Jump", ACT_JUMP),
     BIND("Attack", ACT_ATTACK),
     BIND("Sub-weapon", ACT_SUB),
@@ -195,7 +198,7 @@ static const struct { const char *label, *help; } HELP[] = {
     {"Play as Maria", "Every stage, the Prologue too, is played as Maria: from the next stage."},
     {"Back", "Back to the previous page."},
     {"RetroAchievements", "Earn achievements at retroachievements.org: on / off, your account."},
-    {"Hardcore mode", "No save-state loading, rewind or cheats; unlocks count as hardcore. On restarts the game."},
+    {"Hardcore mode", "No save-state loading, rewind or cheats; unlocks count as hardcore if the server allows it. On restarts the game."},
     {"User name", "Your retroachievements.org user name: A / Enter, type it, then Enter."},
     {"Password", "Used once to log in; only the login token is kept. A / Enter, type it, then Enter."},
     {"Log in", "Log in to RetroAchievements with the name and password above."},
@@ -304,7 +307,9 @@ MenuResult menu_nav(Menu *m, Settings *s, Nav nav)
             m->capture_until = SDL_GetTicks() + 5000;
             m->n_held = m->n_last = m->held_key = m->last_key = 0;
             m->key_after = false;
-            snprintf(m->status, sizeof m->status, "Hold its button, two buttons (Back, then RB) or key until the count ends.");
+            snprintf(m->status, sizeof m->status, "%s", bind_action(it->arg)->keys_only
+                     ? "Hold a key until the count ends: it moves as well as the arrow does."
+                     : "Hold its button, two buttons (Back, then RB) or key until the count ends.");
             return MENU_NOTHING;
         case IT_EDIT:
             m->editing = *sel + 1;
@@ -478,6 +483,8 @@ MenuResult menu_capture(Menu *m, Settings *s, const Input *in, const SDL_Event *
 
 static const char *item_help(int page, const Item *it)
 {
+    if (it->kind == IT_BIND && bind_action(it->arg)->keys_only)
+        return "A key of your own to move as well as the arrow (W, A, S, D, say): A / Enter, then hold it. Delete clears it.";
     if (it->kind == IT_BIND)
         return bind_action(it->arg)->clearable
                    ? "A / Enter, then hold its button (or two) or key until the count ends. X / Delete clears it."
@@ -670,6 +677,12 @@ static void draw_rows(SDL_Renderer *ren, const Frame *F, const Menu *m, const Se
                          : got == CAPTURED        ? (is_pad ? bind_pad_name(v) : bind_key_name(v))
                                                   : "Hold it now...",
                          left);
+            } else if (bind_action(it->arg)->keys_only) {
+                /* the d-pad and the arrow, fixed, and the player's own key */
+                static const char *const dir[] = {"up", "down", "left", "right"}, *const arrow[] = {"Up", "Down", "Left", "Right"};
+                int d = it->arg - ACT_UP, k = s->bind_key[it->arg];
+                snprintf(row, sizeof row, "%s\tD-pad %s\t%s%s%s", it->label, dir[d], arrow[d], k ? " / " : "",
+                         k ? bind_key_name(k) : "");
             } else {
                 snprintf(row, sizeof row, "%s\t%s\t%s", it->label, bind_pad_name(s->bind_pad[it->arg]),
                          bind_key_name(s->bind_key[it->arg]));

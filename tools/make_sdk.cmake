@@ -40,7 +40,8 @@ set(FRONTEND_SOURCES
   tools/frontend/http.c
   tools/frontend/achievements.c
   tools/frontend/update.c
-  tools/frontend/child.c)
+  tools/frontend/child.c
+  tools/frontend/showcase.c)
 include("${SRC}/tools/rcheevos_sources.cmake")
 
 file(REMOVE_RECURSE "${OUT}")

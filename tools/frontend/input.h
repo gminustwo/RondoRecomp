@@ -67,6 +67,8 @@ void input_device_event(Input *in, const SDL_Event *ev);
 bool input_pad_last(const Input *in);
 /* The controls to use: ACT_COUNT controller buttons and keys (kept by the caller). */
 void input_use_binds(Input *in, const int *pad, const int *key);
+/* Keys held, read in place of the keyboard's (--showcase: showcase.h); NULL: the keyboard. */
+void input_use_keys(const bool *keys);
 /* An action's control is held / was pressed by this event (key, button or trigger). */
 bool input_held(const Input *in, int act);
 bool input_pressed(const Input *in, const SDL_Event *ev, int act);

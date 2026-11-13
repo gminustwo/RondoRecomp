@@ -70,7 +70,7 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
   add_executable(rondo WIN32 tools/frontend/main.c tools/frontend/locate.c tools/frontend/game.c tools/frontend/prompt.c
     tools/frontend/input.c tools/frontend/binds.c tools/frontend/menu.c tools/frontend/settings.c tools/frontend/video.c tools/frontend/theme.c tools/frontend/ui_fonts.c
     tools/frontend/http.c tools/frontend/achievements.c tools/frontend/update.c tools/frontend/child.c
-    runtime/recomp/recomp_none.c)
+    tools/frontend/showcase.c runtime/recomp/recomp_none.c)
   target_include_directories(rondo PRIVATE ${SDL3_INCLUDE_DIR} tools/recomp)
   target_link_libraries(rondo PRIVATE pce rcheevos ${SDL3_LIBRARY})
   if(WIN32)
@@ -99,8 +99,8 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
   # Setup: imports the player's disc image and builds rondo.exe with zig cc
   find_library(ZLIB_STATIC NAMES libz.a z HINTS "${_cc_prefix}/lib")
   if(ZLIB_STATIC)
-    # Virtual Console releases (tools/setup/vc.c) and .7z archives: the LZMA SDK's 7z decoder
-    # and stb_vorbis, both public domain
+    # Virtual Console releases (tools/setup/vc.c), .7z archives and .chd images (tools/setup/chd.c):
+    # the LZMA SDK's decoder and stb_vorbis, both public domain
     file(GLOB LZMA_SOURCES third_party/lzma/*.c)
     add_library(lzmadec STATIC ${LZMA_SOURCES})
     target_compile_definitions(lzmadec PUBLIC Z7_PPMD_SUPPORT Z7_EXTRACT_ONLY)
@@ -110,7 +110,7 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
       set_source_files_properties(tools/setup/vorbis.c PROPERTIES COMPILE_OPTIONS "-w")
     endif()
     # updates (tools/setup/install.c): GitHub's releases, downloaded as the game's own requests are
-    set(SETUP_SOURCES tools/setup/main.c tools/setup/zip.c tools/setup/install.c
+    set(SETUP_SOURCES tools/setup/main.c tools/setup/zip.c tools/setup/install.c tools/setup/chd.c
       tools/setup/vc.c tools/setup/vc_crypto.c tools/setup/sevenzip.c tools/setup/vorbis.c
       tools/frontend/http.c tools/frontend/update.c tools/frontend/child.c runtime/recomp/recomp_none.c)
     add_executable(rondo_setup ${SETUP_SOURCES})

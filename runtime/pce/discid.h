@@ -12,6 +12,9 @@ typedef enum {
 /* Checks the PC Engine CD signature, then fingerprints the boot program sector.
  * If fingerprint is non-NULL it receives the fingerprint (0 when unreadable). */
 DiscKind discid_identify(const char *cue_path, uint64_t *fingerprint);
+/* The same check from the first data track's sectors 1 and 2 (2048 bytes each), for a disc
+ * image read some other way (Setup's .chd reader). */
+DiscKind discid_identify_sectors(const uint8_t *sector1, const uint8_t *sector2, uint64_t *fingerprint);
 
 typedef enum {
     DISC_LANG_UNKNOWN,  /* unreadable */

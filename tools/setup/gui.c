@@ -265,7 +265,7 @@ int main(int argc, char **argv)
         int nb = 0;
         if (can_update && st != RUNNING) buttons[nb++] = (Button){456, 10, 160, 22, update_label, B_UPDATE};
         if (st == IDLE || st == DONE || st == FAILED) {
-            /* the disc: a zip (or a .cue file), or the folder it was unzipped to */
+            /* the disc: a zip (or a .7z, .cue or .chd file), or the folder it was unzipped to */
             buttons[nb++] = (Button){24, 340, 140, 32, "Disc zip...", B_CHOOSE};
             buttons[nb++] = (Button){172, 340, 140, 32, "Disc folder...", B_FOLDER};
             if (have_exe && st != FAILED) buttons[nb++] = (Button){320, 340, 90, 32, "Play", B_PLAY};
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
                     if (!hit(&buttons[i], ev.button.x, ev.button.y)) continue;
                     if (buttons[i].id == B_CHOOSE) {
                         static const SDL_DialogFileFilter filters[] = {
-                            {"Disc image (zip, 7z or cue), Wii VC (wad)", "zip;7z;cue;wad"}, {"All files", "*"}};
+                            {"Disc image (zip, 7z, cue or chd), Wii VC (wad)", "zip;7z;cue;chd;wad"}, {"All files", "*"}};
                         SDL_ShowOpenFileDialog(on_pick, NULL, win, filters, 2, NULL, false);
                     } else if (buttons[i].id == B_FOLDER) {
                         SDL_ShowOpenFolderDialog(on_pick, NULL, win, NULL, false);
@@ -319,8 +319,8 @@ int main(int argc, char **argv)
 
         SDL_LockMutex(mtx);
         if (st == IDLE) {
-            SDL_RenderDebugText(ren, 24, 60, "1. Your disc image: a .cue file with its .bin/.img/.iso/.wav tracks.");
-            SDL_RenderDebugText(ren, 24, 72, "   Zipped: click \"Disc zip...\" and pick the zip (or pick the .cue).");
+            SDL_RenderDebugText(ren, 24, 60, "1. Your disc image: a .cue with its .bin/.img/.iso/.wav tracks, or a .chd.");
+            SDL_RenderDebugText(ren, 24, 72, "   Zipped: click \"Disc zip...\" and pick the zip (or the .cue or .chd).");
             SDL_RenderDebugText(ren, 24, 84, "   Unzipped: click \"Disc folder...\" and pick the folder it is in.");
             SDL_RenderDebugText(ren, 24, 96, "   The original Japanese disc or the English translation: either works.");
             SDL_RenderDebugText(ren, 24, 112, "2. Setup checks the disc, extracts it, recompiles the game code");

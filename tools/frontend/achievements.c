@@ -29,6 +29,16 @@ static char loaded_hash[33];      /* the hash whose achievements are loaded (or 
 static char note[160];            /* the last login / loading problem, for the menu */
 static char agent[160];           /* User-Agent: RondoRecomp/<version> (<system>) rcheevos/<version> */
 
+/* The server's notices come as an achievement of its own at the top of the set (this id, 0
+ * points, unlocking about 5 s in), which the library never sends back: a client the server
+ * does not recognise (RondoRecomp, until RetroAchievements registers it), or one it allows
+ * only casual play, gets "Warning: Unknown Emulator" / "... Hardcore unlocks cannot be
+ * earned ...", and its hardcore unlocks are recorded as softcore (leaderboard entries not
+ * at all). The library's own RC_CLIENT_ACHIEVEMENT_WARNING_ID, which it keeps private. */
+#define SERVER_NOTICE_ID 101000001u
+static bool server_softcore;      /* the loaded game's notice says hardcore can't be earned */
+static bool hardcore_was;         /* the hardcore setting last applied (ach_configure) */
+
 /* ---- pop-ups and trackers ---------------------------------------------------------- */
 
 typedef struct Popup {
@@ -152,8 +162,11 @@ static void RC_CCONV on_event(const rc_client_event_t *e, rc_client_t *c)
     const rc_client_game_t *g = rc_client_get_game_info(c);
     switch (e->type) {
     case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
-        popup(5000, "Achievement unlocked", e->achievement->title, "%s  (%u points)", e->achievement->description,
-              e->achievement->points);
+        if (e->achievement->id >= SERVER_NOTICE_ID)   /* the server's notice, as it words it */
+            popup(8000, "RetroAchievements", e->achievement->title, "%s", e->achievement->description);
+        else
+            popup(5000, "Achievement unlocked", e->achievement->title, "%s  (%u points)", e->achievement->description,
+                  e->achievement->points);
         break;
     case RC_CLIENT_EVENT_GAME_COMPLETED:
         popup(6000, rc_client_get_hardcore_enabled(c) ? "Game mastered" : "Game completed", g ? g->title : "",
@@ -270,6 +283,21 @@ static bool hash_disc(const char *cue, char hash[33])
 
 static void maybe_load(void);
 
+/* The library runs hardcore as the setting says, unless the server records this client's
+ * hardcore unlocks as softcore: then softcore, so it counts (and re-earns) what the server
+ * keeps. Hardcore's rules stay with the setting either way (ach_hardcore). */
+static void apply_hardcore(void)
+{
+    bool want = set->ra_hardcore && !server_softcore;
+    if (!!rc_client_get_hardcore_enabled(client) != want) rc_client_set_hardcore_enabled(client, want);
+}
+
+static bool hardcore_refused(rc_client_t *c)
+{
+    const rc_client_achievement_t *n = rc_client_get_achievement_info(c, SERVER_NOTICE_ID);
+    return n && n->description && strstr(n->description, "Hardcore unlocks cannot be earned");
+}
+
 static void RC_CCONV on_login(int result, const char *error, rc_client_t *c, void *userdata)
 {
     bool with_token = userdata != NULL;
@@ -300,11 +328,15 @@ static void RC_CCONV on_load(int result, const char *error, rc_client_t *c, void
     loading = false;
     const rc_client_game_t *g = rc_client_get_game_info(c);
     if (result == RC_OK && g && g->id) {
+        server_softcore = hardcore_refused(c);
+        apply_hardcore();
         rc_client_user_game_summary_t sum;
         rc_client_get_user_game_summary(c, &sum);
         note[0] = 0;
-        popup(5000, rc_client_get_hardcore_enabled(c) ? "RetroAchievements  -  hardcore" : "RetroAchievements", g->title,
-              "%u of %u achievements unlocked  (%u of %u points)", sum.num_unlocked_achievements,
+        const char *head = rc_client_get_hardcore_enabled(c)      ? "RetroAchievements  -  hardcore"
+                           : server_softcore && set->ra_hardcore ? "RetroAchievements  -  softcore only"
+                                                                 : "RetroAchievements";
+        popup(5000, head, g->title, "%u of %u achievements unlocked  (%u of %u points)", sum.num_unlocked_achievements,
               sum.num_core_achievements, sum.points_unlocked, sum.points_core);
     } else {
         /* keep loaded_hash: an unknown disc is not asked about again until it changes */
@@ -318,6 +350,8 @@ static void maybe_load(void)
         return;
     if (!strcmp(loaded_hash, game_hash)) return;
     if (loaded_hash[0]) rc_client_unload_game(client);
+    server_softcore = false;               /* asked again with each load */
+    apply_hardcore();
     snprintf(loaded_hash, sizeof loaded_hash, "%s", game_hash);
     n_trackers = n_challenges = 0;
     loading = true;
@@ -349,7 +383,8 @@ void ach_init(Pce *p, Settings *s)
 #else
     snprintf(agent, sizeof agent, "RondoRecomp/" RONDO_VERSION " (Linux) %s", clause);
 #endif
-    rc_client_set_hardcore_enabled(client, set->ra_hardcore);
+    hardcore_was = set->ra_hardcore;
+    apply_hardcore();
     login_with_token();
 }
 
@@ -365,12 +400,16 @@ void ach_configure(void)
     if (!set->ra_enabled) {
         if (loaded_hash[0]) rc_client_unload_game(client);
         loaded_hash[0] = 0;
-        loading = false;
+        loading = server_softcore = false;
         n_trackers = n_challenges = 0;
         progress_until = 0;
     }
-    /* switching hardcore on with a game loaded asks for a restart (RC_CLIENT_EVENT_RESET) */
-    if (!!rc_client_get_hardcore_enabled(client) != set->ra_hardcore) rc_client_set_hardcore_enabled(client, set->ra_hardcore);
+    /* switching hardcore on with a game loaded restarts it: the library asks (RC_CLIENT_EVENT_RESET),
+     * or, while the server refuses hardcore (the library stays softcore), this does, so hardcore's
+     * rules always start from power-on */
+    if (set->ra_hardcore && !hardcore_was && server_softcore && game_loaded()) reset_wanted = true;
+    hardcore_was = set->ra_hardcore;
+    apply_hardcore();
     login_with_token();
     maybe_load();
 }
@@ -390,7 +429,7 @@ void ach_logout(void)
     if (loaded_hash[0]) rc_client_unload_game(client);
     rc_client_logout(client);
     loaded_hash[0] = 0;
-    loading = logging_in = false;
+    loading = logging_in = server_softcore = false;
     n_trackers = n_challenges = 0;
     set->ra_token[0] = 0;
     settings_changed = true;
@@ -431,7 +470,8 @@ bool ach_update(void)
 
 bool ach_hardcore(void)
 {
-    return client && set->ra_enabled && rc_client_get_hardcore_enabled(client) && game_loaded();
+    /* the setting's: kept while the server counts the unlocks as softcore (apply_hardcore) */
+    return client && set->ra_enabled && set->ra_hardcore && game_loaded();
 }
 
 bool ach_take_reset(void)
@@ -484,7 +524,8 @@ void ach_status(char *line0, size_t n0, char *line1, size_t n1)
         rc_client_get_user_game_summary(client, &sum);
         snprintf(line1, n1, "%u of %u achievements, %u of %u points%s", sum.num_unlocked_achievements,
                  sum.num_core_achievements, sum.points_unlocked, sum.points_core,
-                 rc_client_get_hardcore_enabled(client) ? " (hardcore)" : "");
+                 rc_client_get_hardcore_enabled(client) ? " (hardcore)"
+                 : server_softcore && set->ra_hardcore ? " (softcore only: the server allows no hardcore unlocks here)" : "");
     } else if (note[0]) {
         snprintf(line1, n1, "%s", note);
     }

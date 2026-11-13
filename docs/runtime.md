@@ -129,7 +129,7 @@ build/rondo.exe "<path>/game.cue"
 
 | Action | Gamepad | Keyboard | Sends the game |
 |---|---|---|---|
-| Move | d-pad / left stick | arrows | d-pad |
+| Move | d-pad / left stick | arrows (and keys of the player's own) | d-pad |
 | Jump | A (South) | X | I |
 | Attack | X (West) | Z | II |
 | Sub-weapon | B (East) | C | Up + II (macro) |
@@ -147,7 +147,9 @@ the backflip is the second I press while still rising (2-8 frames after the firs
 ends works, 14 is too late; measured with `rondo_headless --press`).
 
 Controls (`binds.c`): the actions the player can rebind (Jump, Attack, Sub-weapon, Item Crash,
-Backflip, Run, Pause, Menu, Rewind, Save state, Load state), each with a controller button
+Backflip, Run, Pause, Menu, Rewind, Save state, Load state, and Move up / down / left / right:
+`keys_only`, a key of the player's own in addition to the arrows, none by default, so WASD
+can move; `bind_assign` refuses them a controller button), each with a controller button
 (SDL gamepad button, the triggers as `BIND_LT` / `BIND_RT`, or a combination of two,
 `BIND_COMBO(hold, press)`: Back + RB) and a key (scancode), kept in
 `Settings.bind_pad` / `bind_key` and settings.ini (`bind_pad_jump = 0` ...). `bind_assign`
@@ -286,6 +288,19 @@ cannot take the keyboard focus, and they ignore real keyboard, mouse and control
 (events and polled state alike): only the input events a test sends itself, marked with
 the device id `TEST_INPUT`, are taken, so typing elsewhere while one runs cannot change it.
 
+Showcase (`showcase.c`): `rondo.exe --showcase SCRIPT` plays a scripted tour in real time with
+sound, for recording a video of the game (OBS capturing the window). The script presses and
+lets go of keys at set frames of the window (`wait N`, `press KEY...`, `release KEY...`,
+`tap KEY... [N]`, `mark TEXT`, `shot FILE`, `quit`; SDL key names). They reach the game as a
+player's keys would: as `TEST_INPUT` events, and in place of SDL's keyboard state
+(`input_use_keys`). So menus, macros, run, rewind and save states all work as for a player,
+and real input is ignored. The window is 1920 x 1080 pixels and cannot take the focus. The
+options the script changes are saved next to it (`SCRIPT.settings.ini`), not in the profile.
+`SCRIPT.log` has the wall clock at frame 0 and each mark's frame and time, so captions can be
+lined up with the recording. `--showcase-fast SCRIPT` runs it uncapped and silent, to check a
+script with its shots. The game's own timing is the same either way, but the menus' animations
+follow the real clock.
+
 Profile: settings, saves, states and the remembered disc live in the pref folder
 (`%APPDATA%\RondoRecomp\RondoRecomp`), or in the folder named by the `RONDORECOMP_PROFILE`
 environment variable (`locate_profile_dir`), which Setup and rondo.exe started from each
@@ -321,6 +336,16 @@ rcheevos 12.5.0 (`third_party/rcheevos`, MIT; built with `RC_NO_THREADS` and onl
   state. A state without one resets them.
 - Hardcore mode turns off state loading, rewind, the cheats and the run; the library asks for
   a restart when it is switched on (`RC_CLIENT_EVENT_RESET`).
+- Whether hardcore counts is the server's call, by the User-Agent's first word. RondoRecomp is
+  not a client it knows yet, so it puts a notice at the top of the set: an achievement of its
+  own (id 101000001, 0 points, unlocking 5 s in, never sent back), "Warning: Unknown Emulator",
+  "Hardcore unlocks cannot be earned using this emulator." It then records hardcore unlocks
+  as softcore and keeps no leaderboard entries. The notice is shown as a RetroAchievements
+  pop-up, not an unlock. When its text says hardcore cannot be earned, the library runs
+  softcore for that game (so the counts and the unlocks are the server's), the pop-up and the
+  menu say "softcore only", and hardcore's rules stay on as set (switching it on still
+  restarts the game, `ach_take_reset`, as RetroAchievements requires). Each load asks again, so a
+  client the server registers later gets hardcore with no change here.
 - `rondo --test-achievements` hashes each installed disc, asks the server which game it is (no
   login needed), and exits 0 when both are game 4855.
 - The features test registers an achievement of its own on the game's state (`$30` = 05, `$31`

@@ -10,8 +10,8 @@ This is the same model as LASRecomp: tools are shipped, the game-specific code i
 2. Run **RondoRecomp Setup** and choose the zip of their *Castlevania: Rondo of Blood* disc image
    ("Disc zip...", which also takes a .cue file), or the folder it is unzipped in ("Disc
    folder...": every .cue under it is checked where it is, and the first Rondo of Blood disc is
-   copied in). A .7z of the image works too, and so do the Virtual Console releases (see
-   Virtual Console below).
+   copied in). A .7z of the image works too, as does a `.chd` (see CHD below), and so do the
+   Virtual Console releases (see Virtual Console below).
 3. Setup checks the disc, extracts what it needs, recompiles the game code and produces `rondo.exe`.
 4. From then on: double-click `rondo.exe`.
 
@@ -26,7 +26,7 @@ This is the same model as LASRecomp: tools are shipped, the game-specific code i
 
 ## Setup pipeline
 
-1. **Import**: read the zip (CUE with BIN, IMG, ISO and/or WAV tracks). Nothing is written until the disc checks out.
+1. **Import**: read the zip (CUE with BIN, IMG, ISO and/or WAV tracks), or unpack a `.chd`. Nothing is written until the disc checks out.
 2. **Identify**: PC Engine CD signature on the first data track, then a fingerprint of the boot
    program sector to recognise the release (unknown releases are refused or need explicit confirmation).
    The original Japanese disc and the English translation share the boot sector; the language
@@ -39,6 +39,11 @@ This is the same model as LASRecomp: tools are shipped, the game-specific code i
    `build/gen/`. Code that cannot be proven statically keeps an interpreter fallback.
 5. **Build**: `zig cc` compiles `build/gen/*.c` and links it with `sdk/librondo.a` and SDL3 into
    `rondo.exe`. Builds are resumable: generated files that are already compiled are skipped.
+   Setup first checks that zig's own files are there (`zig/lib/std/std.zig`) and names the
+   folder for it (`ZIG_LIB_DIR`): zig.exe without them, as in a release unzipped only in part,
+   otherwise fails with just "unable to find zig installation directory ...: FileNotFound"
+   (issue #4). The compiler gets Setup's environment (its cache in `build/zig-cache`, the lib
+   folder) through `child.c`, which on Windows passes SDL's environment to `CreateProcessW`.
 6. **Done**: `rondo.exe` next to `game/`; Setup offers to launch it.
 
 An `icon.ico` or `icon.png` (up to 256 x 256) the player puts next to Setup is built into
@@ -157,6 +162,32 @@ Linux (in WSL):
 RetroAchievements: the SDK carries rcheevos (`sdk/src/rcheevos`). `sdk/sources.txt` lists its
 sources, plus `-I` (relative to the SDK) and `-D` lines, which Setup passes to the compiler.
 On Windows the game also links `winhttp`.
+
+## CHD
+
+Setup reads a `.chd` (MAME's compressed hunks of data, as `chdman createcd` makes it) in
+`tools/setup/chd.c`, on its own or in the folder chosen with "Disc folder..." (after the
+`.cue` files there). It handles CHD version 5 with chdman's CD codecs: `cdlz` (LZMA, the LZMA
+SDK's decoder), `cdzl` (Deflate, zlib) and `cdfl` (FLAC: a small decoder of its own for the
+16-bit stereo frames chdman writes). Plain `lzma` / `zlib` hunks and uncompressed ones work
+too. It refuses, saying why, an older version (chdman copy updates it), another codec (such
+as `cdzs`, zstd) and a `.chd` that needs a parent.
+
+The first data track's sectors 1 and 2 are read straight from the `.chd`
+(`discid_identify_sectors`), so a disc that isn't Rondo of Blood is turned down before
+anything is unpacked. The disc is then written to `game.tmp` as chdman extractcd would: a
+cue sheet and a `.bin` per track, named after the `.chd` like a Redump set (`<name> (Track
+02).bin`), with audio turned back to little-endian. Each track's pregap is `INDEX 00` when the
+`.chd` stores it (`PGTYPE:V...`) and a `PREGAP` line otherwise. Sectors whose sync header
+and ECC `cdlz` / `cdzl` left out have them rebuilt. Every hunk is checked against the CRC-16
+in the map, so a damaged `.chd` fails at the hunk.
+
+Tested with the Redump-sourced Japanese disc (`Akumajou Dracula X - Chi no Rondo (Japan)
+(FABT, FACT).chd`, 22 tracks, `cdlz,cdzl,cdfl`): about 7 s to unpack. All 20 audio tracks match a
+trurip dump of the disc to the byte, and so does every data sector from `INDEX 01` on, except
+how the first 75 pregap sectors and the last sector of each data track are framed (zeros in
+the Redump image, empty Mode 1 sectors in trurip's), which the game never reads. The capture
+run found the same 4312 entry points as with the other images, and `--autotest` passes.
 
 ## Virtual Console
 

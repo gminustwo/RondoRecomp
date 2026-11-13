@@ -8,6 +8,12 @@
 
 #define STICK 16000
 
+static const bool *key_state;   /* the showcase's keys in place of the keyboard's */
+
+void input_use_keys(const bool *keys) { key_state = keys; }
+
+static const bool *keys_held(void) { return key_state ? key_state : SDL_GetKeyboardState(NULL); }
+
 void input_init(Input *in)
 {
     memset(in, 0, sizeof *in);
@@ -66,7 +72,7 @@ bool input_held(const Input *in, int act)
 {
     if (!in->bind_pad || act < 0 || act >= ACT_COUNT) return false;
     int k = in->bind_key[act];
-    if (k > 0 && k < SDL_SCANCODE_COUNT && SDL_GetKeyboardState(NULL)[k]) return true;
+    if (k > 0 && k < SDL_SCANCODE_COUNT && keys_held()[k]) return true;
     int b = in->bind_pad[act];
     if (BIND_HOLD(b) != BIND_NONE)                 /* the second pressed while the first was held */
         return pad_held(in, BIND_HOLD(b)) && pad_held(in, BIND_PRESS(b)) && swallowed(in, BIND_PRESS(b));
@@ -207,13 +213,17 @@ static void push(Input *in, uint8_t set, uint8_t clear, int frames)
 
 uint8_t input_game(Input *in)
 {
-    const bool *k = SDL_GetKeyboardState(NULL);
+    const bool *k = keys_held();
     uint8_t m = 0;
     bool sub = false, flip = false;
     if (k[SDL_SCANCODE_UP]) m |= PAD_UP;
     if (k[SDL_SCANCODE_DOWN]) m |= PAD_DOWN;
     if (k[SDL_SCANCODE_LEFT]) m |= PAD_LEFT;
     if (k[SDL_SCANCODE_RIGHT]) m |= PAD_RIGHT;
+    if (input_held(in, ACT_UP)) m |= PAD_UP;          /* the player's own keys to move (WASD) */
+    if (input_held(in, ACT_DOWN)) m |= PAD_DOWN;
+    if (input_held(in, ACT_LEFT)) m |= PAD_LEFT;
+    if (input_held(in, ACT_RIGHT)) m |= PAD_RIGHT;
     /* the game's buttons and the two macros, from the controls (keys and controller alike) */
     if (input_held(in, ACT_JUMP)) m |= PAD_I;
     if (input_held(in, ACT_ATTACK)) m |= PAD_II;
@@ -438,6 +448,35 @@ int input_check(char *err, int errlen)
         bind_defaults(pad, key);
         if ((p = check_step(&c, BACK, true)) != MENU) FAIL("Back with no combinations: %#x, not the menu at once", p);
         check_step(&c, BACK, false);
+    }
+    /* keys of the player's own to move (WASD, with A and S taken from backflip and run), beside
+     * the arrows; opposite ones cancel out */
+    {
+        static bool keys[SDL_SCANCODE_COUNT];
+        const bool *was_keys = key_state;
+        int pad[ACT_COUNT], key[ACT_COUNT];
+        bind_defaults(pad, key);
+        key[ACT_FLIP] = key[ACT_RUN] = 0;
+        key[ACT_UP] = SDL_SCANCODE_W;
+        key[ACT_LEFT] = SDL_SCANCODE_A;
+        key[ACT_DOWN] = SDL_SCANCODE_S;
+        key[ACT_RIGHT] = SDL_SCANCODE_D;
+        Input k;
+        memset(&k, 0, sizeof k);
+        input_use_binds(&k, pad, key);
+        key_state = keys;
+        memset(keys, 0, sizeof keys);
+        keys[SDL_SCANCODE_W] = keys[SDL_SCANCODE_D] = true;
+        unsigned m;
+        if ((m = input_game(&k)) != (PAD_UP | PAD_RIGHT)) FAIL("W + D: %#x, not up and right", m);
+        keys[SDL_SCANCODE_W] = false;
+        keys[SDL_SCANCODE_A] = true;
+        if ((m = input_game(&k)) != 0) FAIL("A + D: %#x, not nothing", m);
+        memset(keys, 0, sizeof keys);
+        keys[SDL_SCANCODE_LEFT] = keys[SDL_SCANCODE_S] = true;
+        if ((m = input_game(&k)) != (PAD_LEFT | PAD_DOWN)) FAIL("Left arrow + S: %#x, not left and down", m);
+        if (input_run_held(&k)) FAIL("S still runs");
+        key_state = was_keys;
     }
     if (c.in.pads[0]) SDL_CloseGamepad(c.in.pads[0]);
     if (c.id) SDL_DetachVirtualJoystick(c.id);

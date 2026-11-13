@@ -6,17 +6,22 @@
 #include <string.h>
 
 static const ActionInfo ACTIONS[ACT_COUNT] = {
-    [ACT_JUMP] = {"Jump", "jump", SDL_GAMEPAD_BUTTON_SOUTH, SDL_SCANCODE_X, false},
-    [ACT_ATTACK] = {"Attack", "attack", SDL_GAMEPAD_BUTTON_WEST, SDL_SCANCODE_Z, false},
-    [ACT_SUB] = {"Sub-weapon", "subweapon", SDL_GAMEPAD_BUTTON_EAST, SDL_SCANCODE_C, true},
-    [ACT_CRASH] = {"Item Crash", "item_crash", SDL_GAMEPAD_BUTTON_NORTH, SDL_SCANCODE_V, false},
-    [ACT_FLIP] = {"Backflip", "backflip", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_SCANCODE_A, true},
-    [ACT_RUN] = {"Run (hold)", "run", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_SCANCODE_S, true},
-    [ACT_PAUSE] = {"Pause", "pause", SDL_GAMEPAD_BUTTON_START, SDL_SCANCODE_RETURN, false},
-    [ACT_MENU] = {"Menu", "menu", SDL_GAMEPAD_BUTTON_BACK, SDL_SCANCODE_F1, false},
-    [ACT_REWIND] = {"Rewind (hold)", "rewind", BIND_LT, SDL_SCANCODE_R, true},
-    [ACT_SAVE] = {"Save state", "save_state", BIND_NONE, SDL_SCANCODE_F5, true},
-    [ACT_LOAD] = {"Load state", "load_state", BIND_NONE, SDL_SCANCODE_F8, true},
+    [ACT_JUMP] = {"Jump", "jump", SDL_GAMEPAD_BUTTON_SOUTH, SDL_SCANCODE_X, false, false},
+    [ACT_ATTACK] = {"Attack", "attack", SDL_GAMEPAD_BUTTON_WEST, SDL_SCANCODE_Z, false, false},
+    [ACT_SUB] = {"Sub-weapon", "subweapon", SDL_GAMEPAD_BUTTON_EAST, SDL_SCANCODE_C, true, false},
+    [ACT_CRASH] = {"Item Crash", "item_crash", SDL_GAMEPAD_BUTTON_NORTH, SDL_SCANCODE_V, false, false},
+    [ACT_FLIP] = {"Backflip", "backflip", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_SCANCODE_A, true, false},
+    [ACT_RUN] = {"Run (hold)", "run", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_SCANCODE_S, true, false},
+    [ACT_PAUSE] = {"Pause", "pause", SDL_GAMEPAD_BUTTON_START, SDL_SCANCODE_RETURN, false, false},
+    [ACT_MENU] = {"Menu", "menu", SDL_GAMEPAD_BUTTON_BACK, SDL_SCANCODE_F1, false, false},
+    [ACT_REWIND] = {"Rewind (hold)", "rewind", BIND_LT, SDL_SCANCODE_R, true, false},
+    [ACT_SAVE] = {"Save state", "save_state", BIND_NONE, SDL_SCANCODE_F5, true, false},
+    [ACT_LOAD] = {"Load state", "load_state", BIND_NONE, SDL_SCANCODE_F8, true, false},
+    /* the arrows always move; these are keys of the player's own as well (none at first) */
+    [ACT_UP] = {"Move up", "move_up", BIND_NONE, 0, true, true},
+    [ACT_DOWN] = {"Move down", "move_down", BIND_NONE, 0, true, true},
+    [ACT_LEFT] = {"Move left", "move_left", BIND_NONE, 0, true, true},
+    [ACT_RIGHT] = {"Move right", "move_right", BIND_NONE, 0, true, true},
 };
 
 const ActionInfo *bind_action(int act) { return act >= 0 && act < ACT_COUNT ? &ACTIONS[act] : NULL; }
@@ -113,6 +118,10 @@ const char *bind_assign(int pad[ACT_COUNT], int key[ACT_COUNT], int act, bool is
     static char msg[160];
     if (act < 0 || act >= ACT_COUNT) return NULL;
     int *set = is_pad ? pad : key, none = is_pad ? BIND_NONE : 0;
+    if (is_pad && ACTIONS[act].keys_only) {
+        snprintf(msg, sizeof msg, "On a controller, the d-pad and the left stick move.");
+        return msg;
+    }
     if (is_pad ? bind_pad_reserved(value) : bind_key_reserved(value)) {
         snprintf(msg, sizeof msg, "%s is kept for %s.", is_pad ? bind_pad_name(value) : bind_key_name(value),
                  is_pad ? (BIND_HOLD(value) == SDL_GAMEPAD_BUTTON_GUIDE || BIND_PRESS(value) == SDL_GAMEPAD_BUTTON_GUIDE
@@ -153,6 +162,10 @@ const char *bind_clear(int pad[ACT_COUNT], int key[ACT_COUNT], int act, bool is_
     if (act < 0 || act >= ACT_COUNT) return NULL;
     if (!ACTIONS[act].clearable) {
         snprintf(msg, sizeof msg, "%s needs a %s.", ACTIONS[act].name, is_pad ? "button" : "key");
+        return msg;
+    }
+    if (is_pad && ACTIONS[act].keys_only) {
+        snprintf(msg, sizeof msg, "On a controller, the d-pad and the left stick move.");
         return msg;
     }
     if (is_pad) pad[act] = BIND_NONE;
@@ -218,6 +231,21 @@ int bind_check(char *err, int errlen)
         FAIL("valid controller bindings");
     if (strcmp(bind_key_name(SDL_SCANCODE_RETURN), "Enter") || strcmp(bind_key_name(SDL_SCANCODE_F5), "F5"))
         FAIL("key names");
+    /* WASD to move: A and S (backflip, run) swap over, leaving those two without a key */
+    bind_defaults(pad, key);
+    static const int wasd[4][2] = {{ACT_UP, SDL_SCANCODE_W}, {ACT_LEFT, SDL_SCANCODE_A}, {ACT_DOWN, SDL_SCANCODE_S},
+                                   {ACT_RIGHT, SDL_SCANCODE_D}};
+    for (int i = 0; i < 4; i++) bind_assign(pad, key, wasd[i][0], false, wasd[i][1]);
+    for (int i = 0; i < 4; i++)
+        if (key[wasd[i][0]] != wasd[i][1]) FAIL("WASD to move: %s did not take its key", ACTIONS[wasd[i][0]].name);
+    if (key[ACT_FLIP] || key[ACT_RUN] || key[ACT_JUMP] != SDL_SCANCODE_X) FAIL("WASD to move: backflip / run did not swap");
+    bind_assign(pad, key, ACT_UP, true, SDL_GAMEPAD_BUTTON_NORTH);
+    bind_clear(pad, key, ACT_UP, true);
+    if (pad[ACT_UP] != BIND_NONE || pad[ACT_CRASH] != SDL_GAMEPAD_BUTTON_NORTH) FAIL("a controller button to move up");
+    bind_assign(pad, key, ACT_DOWN, false, SDL_SCANCODE_DOWN);
+    if (key[ACT_DOWN] != SDL_SCANCODE_S) FAIL("an arrow was taken to move");
+    bind_clear(pad, key, ACT_UP, false);
+    if (key[ACT_UP]) FAIL("move up's key was not cleared");
 #undef FAIL
     return bad;
 }

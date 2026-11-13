@@ -32,10 +32,17 @@ DiscKind discid_identify(const char *cue_path, uint64_t *fingerprint)
     const DiscTrack *t = NULL;
     for (int i = 0; i < disc.n_tracks; i++)
         if (disc.tracks[i].data) { t = &disc.tracks[i]; break; }
-    if (!t || !disc_read_data(&disc, t->lba + 1, 1, sec) || memcmp(sec + 0x20, "PC Engine CD-ROM SYSTEM", 23))
+    uint8_t boot[2048];
+    if (!t || !disc_read_data(&disc, t->lba + 1, 1, sec) || !disc_read_data(&disc, t->lba + 2, 1, boot))
         return DISC_INVALID;
-    if (!disc_read_data(&disc, t->lba + 2, 1, sec)) return DISC_INVALID;
-    uint64_t h = fnv1a(sec, sizeof sec);
+    return discid_identify_sectors(sec, boot, fingerprint);
+}
+
+DiscKind discid_identify_sectors(const uint8_t *sector1, const uint8_t *sector2, uint64_t *fingerprint)
+{
+    if (fingerprint) *fingerprint = 0;
+    if (memcmp(sector1 + 0x20, "PC Engine CD-ROM SYSTEM", 23)) return DISC_INVALID;
+    uint64_t h = fnv1a(sector2, 2048);
     if (fingerprint) *fingerprint = h;
     for (size_t i = 0; i < sizeof known_boot / sizeof known_boot[0]; i++)
         if (h == known_boot[i]) return DISC_RONDO;

@@ -32,6 +32,7 @@
 #include "pce/state.h"
 #include "recomp/recomp.h"
 #include "settings.h"
+#include "showcase.h"
 #include "theme.h"
 #include "video.h"
 #include "prompt.h"
@@ -502,8 +503,8 @@ int main(int argc, char **argv)
     /* the test runs (--autotest...) are silent: the sound is made as usual, for SDL's dummy
      * driver (RONDO_TEST_AUDIO=1 to hear them) */
     for (int i = 1; i < argc; i++)
-        if ((!strncmp(argv[i], "--autotest", 10) || !strcmp(argv[i], "--test-achievements")) &&
-            !SDL_getenv("RONDO_TEST_AUDIO"))
+        if ((!strncmp(argv[i], "--autotest", 10) || !strcmp(argv[i], "--test-achievements") ||
+             !strcmp(argv[i], "--showcase-fast")) && !SDL_getenv("RONDO_TEST_AUDIO"))
             SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -514,8 +515,16 @@ int main(int argc, char **argv)
      * skipping, take screenshots of the video modes and menu into DIR, then quit. */
     bool autotest = false, play_now = false, autotest_start = false, test_ach = false;
     const char *features_dir = NULL, *disc_arg = NULL, *update_dir = NULL;
+    /* --showcase SCRIPT: a scripted tour in real time, for a video (showcase.h);
+     * --showcase-fast SCRIPT: the same uncapped and silent */
+    const char *showcase = NULL;
+    bool showcase_fast = false;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--autotest")) autotest = true;
+        else if ((!strcmp(argv[i], "--showcase") || !strcmp(argv[i], "--showcase-fast")) && i + 1 < argc) {
+            showcase_fast = argv[i][10] != 0;
+            showcase = argv[++i];
+        }
         else if (!strcmp(argv[i], "--play")) play_now = true;
         else if (!strcmp(argv[i], "--autotest-features") && i + 1 < argc) features_dir = argv[++i];
         else if (!strcmp(argv[i], "--autotest-start")) autotest_start = true;
@@ -546,6 +555,15 @@ int main(int argc, char **argv)
     SDL_CreateDirectory(states_dir);
     Settings set;
     settings_load(&set, settings_path);
+    if (showcase) {   /* the options it changes are kept next to the script, not in the profile */
+        snprintf(settings_path, sizeof settings_path, "%s.settings.ini", showcase);
+        char serr[300];
+        if (!showcase_load(showcase, serr, sizeof serr)) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Rondo Recomp", serr, NULL);
+            SDL_Quit();
+            return 1;
+        }
+    }
     bool test_mode = autotest || features_dir || autotest_start || test_ach || update_dir || setup_arg;
     if (test_mode) TLOG("audio driver: %s\n", SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none");
     if (test_mode) {   /* fixed options; nothing is saved */
@@ -559,16 +577,24 @@ int main(int argc, char **argv)
     char title[256];
     snprintf(title, sizeof title, "Rondo Recomp (%s)", recomp_build_id);
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    if (set.fullscreen && !test_mode) flags |= SDL_WINDOW_FULLSCREEN;
-    if (test_mode) flags |= SDL_WINDOW_NOT_FOCUSABLE;   /* never takes the keyboard from the player */
+    if (set.fullscreen && !test_mode && !showcase) flags |= SDL_WINDOW_FULLSCREEN;
+    if (test_mode || showcase) flags |= SDL_WINDOW_NOT_FOCUSABLE;   /* never takes the keyboard from the player */
     SDL_Window *win = SDL_CreateWindow(title, features_dir ? 1280 : 960, 720, flags);
+    if (win && showcase) {   /* 1920 x 1080 pixels, whatever the desktop's scale */
+        int w, h, pw, ph;
+        SDL_GetWindowSize(win, &w, &h);
+        SDL_GetWindowSizeInPixels(win, &pw, &ph);
+        SDL_SetWindowSize(win, (int)(1920.0 * w / pw + 0.5), (int)(1080.0 * h / ph + 0.5));
+        SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        SDL_SyncWindow(win);
+    }
     SDL_Renderer *ren = win ? SDL_CreateRenderer(win, NULL) : NULL;
     Video video;
     if (!ren || !video_init(&video, ren)) {
         fprintf(stderr, "SDL video setup: %s\n", SDL_GetError());
         return 1;
     }
-    set_vsync(ren, set.vsync && !test_mode);   /* test runs go as fast as they can */
+    set_vsync(ren, set.vsync && !test_mode && !showcase_fast);   /* test runs go as fast as they can */
 
     char disc_path[1024];
     if (!choose_disc(win, ren, disc_arg, disc_path, sizeof disc_path)) {
@@ -636,6 +662,8 @@ int main(int argc, char **argv)
     Input in;
     input_init(&in);
     input_use_binds(&in, set.bind_pad, set.bind_key);   /* the Controls page changes them in place */
+    if (showcase) input_use_keys(showcase_keys());
+    char showcase_shot[1024] = "";
     Menu menu = {0};
     /* --autotest-start: the start screen for 600 frames, a mouse click on Play (a real event
      * through the queue), 300 frames later the title screen (Play skips the logo and intro);
@@ -685,6 +713,7 @@ int main(int argc, char **argv)
     if (autotest) TLOG("process: %d\n", (int)getpid());
 #endif
     while (running) {
+        if (showcase && !showcase_tick(win, TEST_INPUT, showcase_shot, sizeof showcase_shot)) running = false;
         if (autotest_start) {          /* phases wait for the skips to finish, at any speed */
             t_start_loops++;
             int since = t_start_loops - t_phase_at;
@@ -813,7 +842,7 @@ int main(int argc, char **argv)
             }
             /* test runs only take the input they send themselves (marked TEST_INPUT), so a key
              * pressed on the desktop while one runs cannot change it */
-            if (test_mode && !test_input(&ev)) continue;
+            if ((test_mode || showcase) && !test_input(&ev)) continue;
             input_device_event(&in, &ev);
             if (menu.open) {
                 MenuResult r = MENU_NOTHING;
@@ -1301,7 +1330,7 @@ int main(int argc, char **argv)
                  bbad ? merr : "");
             int ibad = input_check(merr, sizeof merr);
             TLOG("features: controller combinations: %s%s\n",
-                 ibad ? "PROBLEM: " : "Back + RB / LB save and load, Back alone is the menu, RB / LB keep their own",
+                 ibad ? "PROBLEM: " : "Back + RB / LB save and load, Back alone is the menu, RB / LB keep their own; WASD moves",
                  ibad ? merr : "");
             {   /* the Controls page with Save state waiting for its button */
                 Menu cm = {0};
@@ -1309,7 +1338,7 @@ int main(int argc, char **argv)
                 cm.opened_ms = 0;
                 for (int d = 0; d < 7; d++) menu_nav(&cm, &set, NAV_DOWN);
                 menu_nav(&cm, &set, NAV_OK);
-                for (int d = 0; d < 9; d++) menu_nav(&cm, &set, NAV_DOWN);
+                for (int d = 0; d < 13; d++) menu_nav(&cm, &set, NAV_DOWN);   /* past Move x4 and Jump ... Rewind */
                 menu_nav(&cm, &set, NAV_OK);
                 video_draw(&video, &set);
                 menu_draw(&cm, &set, ren);
@@ -1390,8 +1419,8 @@ int main(int argc, char **argv)
             TLOG("features: title screen's PUSH RUN BUTTON! %s (%d frames, as the %s)\n",
                  prompt.frames ? "replaced" : "NOT REPLACED", prompt.frames, prompt.pad ? "controller's" : "keyboard's");
         }
-        if (menu.open != cursor_shown) {           /* the mouse pointer only over menus */
-            cursor_shown = menu.open;
+        if ((menu.open && !showcase) != cursor_shown) {   /* the mouse pointer only over menus */
+            cursor_shown = menu.open && !showcase;
             if (cursor_shown) SDL_ShowCursor();
             else SDL_HideCursor();
         }
@@ -1419,6 +1448,7 @@ int main(int argc, char **argv)
             screenshot(ren, t_upd_shot_path);
             t_upd_shot_path[0] = 0;
         }
+        if (showcase_shot[0]) screenshot(ren, showcase_shot);
         SDL_RenderPresent(ren);
 
         if (features_dir && pce.frame >= 20100) {
@@ -1443,7 +1473,7 @@ int main(int argc, char **argv)
                  ss.language != from ? (pce.wram[RONDO_STATE] == 0x02 ? " (attract mode after 900 frames)" : " (not running?)") : "");
             running = false;
         }
-        if (features_dir) continue;   /* run uncapped */
+        if (features_dir || showcase_fast) continue;   /* run uncapped */
         next += (Uint64)frame_ns;
         Uint64 now = SDL_GetTicksNS();
         if (next > now) SDL_DelayNS(next - now);

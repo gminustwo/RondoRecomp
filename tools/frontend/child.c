@@ -47,6 +47,34 @@ static bool add_arg(char **cmd, size_t *len, size_t *cap, const char *arg)
     return true;
 }
 
+/* NAME=value, by name as Windows orders an environment (case aside; the name's end first) */
+static int env_order(const void *a, const void *b)
+{
+    const char *x = *(const char *const *)a, *y = *(const char *const *)b;
+    for (;; x++, y++) {
+        int cx = *x == '=' ? 0 : SDL_toupper((unsigned char)*x), cy = *y == '=' ? 0 : SDL_toupper((unsigned char)*y);
+        if (cx != cy || !cx) return cx - cy;
+    }
+}
+
+/* The environment as SDL keeps it, which SDL_SetEnvironmentVariable changes (Setup: zig's
+ * cache and lib folders) but which CreateProcessW would not pass on by itself, as an
+ * environment block; NULL: the process's own. (SDL_CreateProcess, elsewhere, passes it.) */
+static wchar_t *env_block(void)
+{
+    char **vars = SDL_GetEnvironmentVariables(SDL_GetEnvironment());
+    if (!vars) return NULL;
+    size_t n = 0, total = 1;
+    while (vars[n]) total += (size_t)MultiByteToWideChar(CP_UTF8, 0, vars[n++], -1, NULL, 0);
+    wchar_t *block = n ? SDL_malloc(total * sizeof *block) : NULL, *p = block;
+    SDL_qsort(vars, n, sizeof *vars, env_order);
+    for (size_t i = 0; block && i < n; i++)
+        p += MultiByteToWideChar(CP_UTF8, 0, vars[i], -1, p, (int)(total - (size_t)(p - block)));
+    if (block) *p = 0;
+    SDL_free(vars);
+    return block;
+}
+
 Child *child_start(const char *const *args, char *err, size_t errlen)
 {
     char *cmd = NULL;
@@ -80,9 +108,11 @@ Child *child_start(const char *const *args, char *err, size_t errlen)
     si.hStdError = wr;
     PROCESS_INFORMATION pi;
     memset(&pi, 0, sizeof pi);
-    BOOL ok = CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, NULL, NULL,
+    wchar_t *env = env_block();
+    BOOL ok = CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, env, NULL,
                              &si, &pi);
     DWORD e = GetLastError();
+    SDL_free(env);
     SDL_free(wcmd);
     CloseHandle(wr);   /* the child has its own: the pipe ends when it (and anything it started) does */
     if (nul != INVALID_HANDLE_VALUE) CloseHandle(nul);

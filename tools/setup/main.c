@@ -1,14 +1,15 @@
 /* RondoRecomp Setup (command line): turns the player's own disc image into rondo.exe (Windows)
  * or rondo (Linux).
  *
- * usage: rondo_setup <disc.zip | disc.7z | disc.cue | folder | game.wad | WUP folder>
+ * usage: rondo_setup <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad | WUP folder>
  *                    [--keys FILE] [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]
  *        rondo_setup --rebuild [--out DIR] ...   (reuse DIR/game, add DIR/misses.txt, rebuild)
  *        rondo_setup --update [--check]          (the latest release from GitHub: install.c)
  *
  *   1. import    read the zip (or a .cue, or a folder with the unzipped image: its .cue files,
- *                subfolders too), find a CUE sheet whose files are all present; or a Virtual
- *                Console release, decrypted with the key the player supplies (vc.c)
+ *                subfolders too), find a CUE sheet whose files are all present; or a .chd,
+ *                unpacked to a cue sheet and .bin tracks (chd.c); or a Virtual Console
+ *                release, decrypted with the key the player supplies (vc.c)
  *   2. identify  PC Engine CD signature + boot-sector fingerprint (refuses unknown discs
  *                unless --allow-unknown)
  *   3. extract   to DIR/game (staged in DIR/game.tmp, renamed only after the check passes)
@@ -32,6 +33,7 @@
 #include "pce/discid.h"
 #include "../frontend/programs.h"
 #include "../recomp/gen.h"
+#include "chd.h"
 #include "setup.h"
 #include "vc.h"
 #include "zip.h"
@@ -601,7 +603,7 @@ int setup_main(int argc, char **argv)
         return setup_update(dir, check);
     }
     if (!input && !rebuild) {
-        fprintf(stderr, "usage: rondo_setup <disc.zip | disc.7z | disc.cue | folder | game.wad | WUP folder> [--keys FILE]\n"
+        fprintf(stderr, "usage: rondo_setup <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad | WUP folder> [--keys FILE]\n"
                         "                   [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]\n       rondo_setup --rebuild [--out DIR] [--sdk DIR] [--zig ZIG]\n"
                         "       rondo_setup --update [--check] [--out DIR]\n");
         return 2;
@@ -664,35 +666,50 @@ int setup_main(int argc, char **argv)
         } else if (ends_with(input, ".cue")) {
             if (!import_cue(input, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
             kind = discid_identify(cue, &fp);
+        } else if (ends_with(input, ".chd")) {
+            /* checked before it is unpacked */
+            kind = chd_identify(input, &fp);
+            if (kind == DISC_INVALID) return fail("importing");
+            if (kind == DISC_RONDO || allow_unknown) {
+                if (!chd_import(input, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
+                kind = discid_identify(cue, &fp);
+            }
         } else if (SDL_GetPathInfo(input, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
             /* the unzipped image: its .cue files (subfolders too), each checked where it is
-             * before anything is copied */
+             * before anything is copied; then its .chd files, if no .cue is the game */
             int count = 0, n_cues = 0;
             char **files = SDL_GlobDirectory(input, NULL, 0, &count);   /* the whole tree ("*" stops at a folder) */
             char found[1100] = "";
-            for (int i = 0; files && i < count && kind != DISC_RONDO; i++) {
-                if (!ends_with(files[i], ".cue")) continue;
-                n_cues++;
-                char path[1100];
-                join(path, sizeof path, input, files[i]);
-                say("  found %s\n", files[i]);
-                DiscKind k = discid_identify(path, &fp);
-                if (k == DISC_RONDO || (k == DISC_PCE_UNKNOWN && allow_unknown && !found[0])) {
-                    snprintf(found, sizeof found, "%s", path);
-                    kind = k;
-                } else {
-                    say("  skipped: %s\n", k == DISC_INVALID ? "not a readable PC Engine CD image (are its track files next to it?)"
-                                                            : "not a recognised Rondo of Blood disc");
+            bool found_chd = false;
+            for (int pass = 0; pass < 2; pass++) {
+                for (int i = 0; files && i < count && kind != DISC_RONDO; i++) {
+                    if (!ends_with(files[i], pass ? ".chd" : ".cue")) continue;
+                    n_cues++;
+                    char path[1100];
+                    join(path, sizeof path, input, files[i]);
+                    say("  found %s\n", files[i]);
+                    DiscKind k = pass ? chd_identify(path, &fp) : discid_identify(path, &fp);
+                    if (k == DISC_RONDO || (k == DISC_PCE_UNKNOWN && allow_unknown && !found[0])) {
+                        snprintf(found, sizeof found, "%s", path);
+                        found_chd = pass;
+                        kind = k;
+                    } else {
+                        say("  skipped: %s\n", k == DISC_PCE_UNKNOWN ? "not a recognised Rondo of Blood disc"
+                                               : pass ? g_err : "not a readable PC Engine CD image (are its track files next to it?)");
+                    }
                 }
             }
             SDL_free(files);
-            if (!n_cues) { snprintf(g_err, sizeof g_err, "no .cue file in %s", input); return fail("importing"); }
+            if (!n_cues) { snprintf(g_err, sizeof g_err, "no .cue or .chd file in %s", input); return fail("importing"); }
             if (found[0]) {
-                if (!import_cue(found, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
+                if (!(found_chd ? chd_import(found, stage, cue, sizeof cue) : import_cue(found, stage, cue, sizeof cue))) {
+                    remove_tree(stage);
+                    return fail("importing");
+                }
                 kind = discid_identify(cue, &fp);
             }
         } else {
-            snprintf(g_err, sizeof g_err, "expected a .zip, .7z, .cue or .wad file, or a folder");
+            snprintf(g_err, sizeof g_err, "expected a .zip, .7z, .cue, .chd or .wad file, or a folder");
             return fail("importing");
         }
 
@@ -742,6 +759,22 @@ int setup_main(int argc, char **argv)
     say("\n[4/4] Building " GAME_PROGRAM "\n");
     if (!SDL_GetPathInfo(zig, NULL)) {
         snprintf(g_err, sizeof g_err, "compiler not found at %s", zig);
+        return fail("building");
+    }
+    /* zig's own files (lib/std, the C library sources), which zig looks for next to itself: a
+     * release unpacked only in part has zig.exe without them, and zig then says just "unable to
+     * find zig installation directory ...: FileNotFound" (GitHub issue #4). Named for zig when
+     * they are there (ZIG_LIB_DIR), so it need not search. */
+    char zig_lib[1100], zig_std[1200], std_zig[1300];
+    dirname_of(zig_lib, sizeof zig_lib, zig);
+    snprintf(zig_lib + strlen(zig_lib), sizeof zig_lib - strlen(zig_lib), "lib");
+    join(zig_std, sizeof zig_std, zig_lib, "std");
+    join(std_zig, sizeof std_zig, zig_std, "std.zig");
+    if (SDL_GetPathInfo(std_zig, NULL)) {
+        SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "ZIG_LIB_DIR", zig_lib, true);
+    } else if (!zig_arg) {   /* (a zig of the player's own may keep them elsewhere) */
+        snprintf(g_err, sizeof g_err, "the compiler's files are incomplete: %s is missing. Unzip the whole release "
+                 "again (all of its files, zig\\lib too) into an empty folder and run Setup from there.", std_zig);
         return fail("building");
     }
     if (!build(sdk, zig, out, gen_dir)) return fail("building");

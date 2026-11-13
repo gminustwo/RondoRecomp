@@ -14,7 +14,7 @@ If you have any bugs to report or issues, please use the issues tab to request w
 ## Game Versions Supported
 RondoRecomp works with four releases of *Rondo of Blood*:
 
-PC Engine disc images (a .cue file plus its track files: .bin, .img, .iso and/or .wav; zipped, 7z'd or in a folder)
+PC Engine disc images (a .cue file plus its track files: .bin, .img, .iso and/or .wav; zipped, 7z'd or in a folder), or a .chd made with chdman
 - The original Japanese release, Akumajou Dracula X: Chi no Rondo, for the PC Engine Super CD-ROM².
 - The English fan translation of that disc. Both the 2012 version and the 2024 redump-style version work.
 
@@ -65,16 +65,21 @@ Findings so far: [docs/findings.md](docs/findings.md).
 - An in-game menu (F1 / Back): video modes for 4K, 16:9 and ultrawide screens (4:3 with
   blurred sides, square pixels, stretch, integer scaling, sharp filtering), cinematic
   skipping, cheats (infinite health, hearts, lives), modern controller layout with
-  sub-weapon / Item Crash / backflip buttons, and a Japanese option (with your Japanese disc).
+  sub-weapon / Item Crash / backflip buttons, rebindable controls (keys of your own to move, such
+  as WASD, alongside the arrows), and a Japanese option (with your Japanese disc).
 - The original Japanese disc and the English translation, installed side by side (the
   Japanese story text uses a bundled public-domain kanji font in place of the System Card's).
 - Richter's run from Symphony of the Night (hold LB), and Maria cheats (unlocked; play as her
   from the Prologue on). See [docs/runtime.md](docs/runtime.md).
 - [RetroAchievements](https://retroachievements.org/game/4855): achievements, leaderboards and
   hardcore mode through RetroAchievements' own client library (rcheevos), for both discs.
+  RetroAchievements hasn't recognised Rondo Recomp for hardcore yet. Until it does, its server
+  records unlocks as softcore, doesn't keep leaderboard entries, and shows a "Warning: Unknown
+  Emulator" notice when the game starts. The game then says "softcore only".
 - Windows and Linux (x86-64, glibc 2.35 or newer: the Steam Deck, Ubuntu 22.04, Debian 12,
   Fedora 36, Arch and later).
-- Setup takes the disc image zipped, as a 7z or unzipped, or the Virtual Console releases:
+- Setup takes the disc image zipped, as a 7z, unzipped or as a `.chd` (MAME's compressed CD
+  format), or the Virtual Console releases:
   the Wii's `.wad` (the Japanese game) and the Wii U's title (WUP, the English translation),
   with the console key the player supplies, or a `.wad` installed in Dolphin. See
   [docs/distribution.md](docs/distribution.md#virtual-console).
@@ -99,7 +104,7 @@ non-Steam game. See [docs/PLAYER_README.txt](docs/PLAYER_README.txt) and
 - `tests/` conformance test runners
 - `tools/pce/` platform code: disc access, HuC6280 decoder, System Card table, banked code explorer
 - `tools/rondo/` game-specific formats (overlay loader)
-- `tools/setup/` Setup (command line and window): zip import, disc check, recompile, build with zig cc
+- `tools/setup/` Setup (command line and window): zip, 7z and .chd import, disc check, recompile, build with zig cc
 - `tools/recomp/` code generator and capture script
 - `tools/frontend/` windowed frontend (SDL3)
 - `docs/` notes

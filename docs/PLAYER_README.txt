@@ -9,7 +9,7 @@ What you need
 -------------
 Your disc image: the .cue file together with the track files it lists (.bin, .img, .iso
 and/or .wav), either zipped (the files may be inside a folder in the zip; a .7z works
-too) or unzipped in a folder of their own.
+too) or unzipped in a folder of their own. A .chd (made with chdman) works as well.
 Either disc works: the original Japanese release (Akumajou Dracula X: Chi no Rondo) or
 the English fan translation. With both, you can switch languages in the game.
 The Virtual Console releases work too (see Virtual Console below): the Wii's .wad (the
@@ -17,10 +17,11 @@ Japanese game) and the Wii U's title (WUP, the English translation).
 
 How to use it
 -------------
-1. Unpack this folder anywhere you can write to (not Program Files).
+1. Unpack this folder anywhere you can write to (not Program Files). Unpack all of it: Setup
+   needs every file in the zig folder (about 21,000 of them) to build the game.
 2. Run "RondoRecomp Setup.exe". For a zipped disc image click "Disc zip..." and pick the
-   zip (or the .cue file); for an unzipped one click "Disc folder..." and pick the folder
-   the .cue file is in (subfolders are searched too).
+   zip (or the .cue or .chd file); for an unzipped one click "Disc folder..." and pick the
+   folder the .cue file is in (subfolders are searched too).
 3. Setup checks the disc, extracts it to the game folder, recompiles the game's code
    into native code and builds rondo.exe in this folder. This takes about a minute
    (the first build prepares the bundled C compiler's runtime once).
@@ -129,7 +130,7 @@ Controls
 The defaults (change them on the menu's Controls page, see below):
 
               Controller (Xbox)     Keyboard
-Move          d-pad / left stick    arrow keys      (fixed)
+Move          d-pad / left stick    arrow keys      (fixed; extra keys: see below)
 Jump          A                     X
 Attack        X                     Z
 Sub-weapon    B                     C
@@ -154,6 +155,12 @@ controller button and Delete clears its key, where the game can do without it (S
 Backflip, Run, Rewind, Save state, Load state). Save state and load state have no controller
 button until you give them one. "Reset controls" puts every control back. The
 menus themselves always use the d-pad / stick / arrows, A / Enter and B / Esc.
+
+Moving with other keys (WASD, say): the Move up / down / left / right rows take a key each,
+which moves as well as the arrow does (the arrows, the d-pad and the stick always move).
+They have none until you give them one. A and S are Backflip and Run at first, so giving
+them to Move left and Move down leaves those two without a key: give them others (Shift,
+Space, ...) afterwards.
 
 Two buttons make a combination, such as Back + RB for Save state and Back + LB for Load
 state: during the count hold Back, then press RB, and keep both down until it ends. In play,
@@ -256,7 +263,7 @@ natively in the last session.
 
 Command line
 ------------
-rondo_setup.exe <disc.zip | disc.7z | disc.cue | folder | game.wad> [--keys <file>]
+rondo_setup.exe <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad> [--keys <file>]
                                           the same steps without a window (--keys: the
                                           key file for a Virtual Console release)
 rondo_setup.exe --rebuild                 recompile again with misses.txt

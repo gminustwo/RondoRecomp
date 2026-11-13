@@ -5,7 +5,7 @@
 #include <SDL3/SDL.h>
 
 /* The release's version (Setup, the game's User-Agent for RetroAchievements, the packages) */
-#define RONDO_VERSION "1.0"
+#define RONDO_VERSION "1.1"
 /* The compiler the release carries (zig/, tools/fetch_zig.sh): an update without it (update.h)
  * is for installations that have this one */
 #define RONDO_ZIG_VERSION "0.17.0"
