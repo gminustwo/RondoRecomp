@@ -1,7 +1,7 @@
 /* Windowed frontend (SDL3): start screen, video, input, audio, menu, save states, rewind,
  * cheats.
  *
- * usage: rondo [game.cue] [--play] [--autotest] [--autotest-features DIR] [--autotest-start]
+ * usage: rondo [game.cue | game.chd] [--play] [--autotest] [--autotest-features DIR] [--autotest-start]
  *              [--test-achievements] [--autotest-update DIR]
  *   With no disc argument it uses the disc Setup installed, then the remembered disc, then
  *   searches the folders around the executable, then asks once with a file picker and
@@ -9,8 +9,9 @@
  *   waits until Play) unless --play is given or the option is off.
  *
  * Controls: see input.h (also on the menu's Controls page). F1 / Esc / the controller's
- * Back button open the menu; options are kept in settings.ini in the pref folder
- * (%APPDATA%\RondoRecomp\RondoRecomp on Windows) with bram.bin and states\.
+ * Back button open the menu; options are kept in settings.ini in the profile folder
+ * (locate_profile_dir: %APPDATA%\RondoRecomp\RondoRecomp on Windows, or a user folder next to
+ * the game) with bram.bin and states\.
  */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -35,6 +36,7 @@
 #include "showcase.h"
 #include "theme.h"
 #include "video.h"
+#include "moves.h"
 #include "prompt.h"
 #include "programs.h"
 #include "update.h"
@@ -88,7 +90,7 @@ static void SDLCALL on_pick(void *userdata, const char *const *files, int filter
 static bool pick_file(SDL_Window *win, SDL_Renderer *ren, char *out, size_t n)
 {
     static Pick pick;
-    static const SDL_DialogFileFilter filters[] = {{"PC Engine CD image (*.cue)", "cue"}};
+    static const SDL_DialogFileFilter filters[] = {{"PC Engine CD image (*.cue, *.chd)", "cue;chd"}};
     SDL_SetAtomicInt(&pick.done, 0);
     pick.path[0] = 0;
     SDL_ShowOpenFileDialog(on_pick, &pick, win, filters, 1, NULL, false);
@@ -117,7 +119,7 @@ static bool choose_disc(SDL_Window *win, SDL_Renderer *ren, const char *arg, cha
         return true;
     }
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Rondo Recomp",
-                             "Select the .cue file of your Castlevania: Rondo of Blood disc image.\n"
+                             "Select the .cue (or .chd) file of your Castlevania: Rondo of Blood disc image.\n"
                              "It will be remembered for next time.", win);
     for (;;) {
         if (!pick_file(win, ren, out, n)) return false;
@@ -139,7 +141,7 @@ static bool choose_disc(SDL_Window *win, SDL_Renderer *ren, const char *arg, cha
         }
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Rondo Recomp",
                                  "That file could not be read as a PC Engine CD image.\n"
-                                 "Choose the .cue file of the disc image.", win);
+                                 "Choose the .cue (or .chd) file of the disc image.", win);
     }
 }
 
@@ -152,12 +154,27 @@ static GameWatch gw;
 static char pref_dir[1024];
 static bool no_save_files;   /* test runs: fresh backup RAM, nothing written to bram.bin */
 static TitlePrompt prompt;   /* the title's PUSH RUN BUTTON! as this PC's button (pad set per frame) */
+static Moves moves;          /* the Gameplay page's 8-way whip and limp whip (moves.h) */
+static MoveOptions move_opts;   /* this frame's: off in hardcore mode and the tests */
 
-static void run_frame(void)
+/* A frame of the game. While rewinding (`live` false) the moves only draw: the frame shown is
+ * one already played. */
+static void run_frame_as(bool live)
 {
     prompt_before_frame(&prompt, &pce);
+    moves_before_frame(&moves, &pce, &move_opts, live);
     pce_run_frame(&pce);
     prompt_after_frame(&prompt, &pce);
+    moves_after_frame(&moves, &pce, &move_opts, live);
+}
+
+static void run_frame(void) { run_frame_as(true); }
+
+/* the frontend's own bookkeeping, after a state load, a rewind or a restart */
+static void watch_reset(void)
+{
+    game_watch_reset(&gw, &pce);
+    moves_reset(&moves);
 }
 
 typedef struct Session {
@@ -206,6 +223,7 @@ static bool start_game(Session *ss, const char *disc_arg, char *err, int err_len
         return false;
     }
     flush_bram(ss);
+    pce_close(&pce);
     if (!pce_init(&pce, disc, err, err_len) || !pce_boot(&pce, err, err_len)) return false;
     snprintf(ss->disc, sizeof ss->disc, "%s", disc);
     int language = disc_language(disc);
@@ -221,14 +239,14 @@ static bool start_game(Session *ss, const char *disc_arg, char *err, int err_len
     SDL_free(data);
     pce.bram_dirty = false;
     if (have_rewind) rewind_reset(&rw, &pce);
-    game_watch_reset(&gw, &pce);
+    watch_reset();
     ach_game_started(disc);
     return true;
 }
 
 /* The Language option: restart with set->language's disc (each language is its own disc: the
  * original Japanese one, or the English translation). Without one installed or chosen
- * before, `ask` lets the player pick its .cue. The outcome goes to status; set->language
+ * before, `ask` lets the player pick its .cue or .chd. The outcome goes to status; set->language
  * ends up as the running disc's. */
 static void switch_language(Session *ss, Settings *set, const char *main_disc, bool ask, SDL_Window *win,
                             SDL_Renderer *ren, char *status, size_t status_len)
@@ -242,9 +260,9 @@ static void switch_language(Session *ss, Settings *set, const char *main_disc, b
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Rondo Recomp",
             want == LANG_JA
                 ? "The Japanese original is its own disc image (Akumajou Dracula X: Chi no Rondo).\n"
-                  "Select its .cue file; it will be remembered.\n"
+                  "Select its .cue (or .chd) file; it will be remembered.\n"
                   "(Running Setup with its zip installs it next to the English patch.)"
-                : "The English patch is its own disc image (the fan translation).\nSelect its .cue file; "
+                : "The English patch is its own disc image (the fan translation).\nSelect its .cue (or .chd) file; "
                   "it will be remembered.\n(Running Setup with its zip installs it next to the Japanese "
                   "original.)", win);
         if (!pick_file(win, ren, disc, sizeof disc)) problem = "No disc chosen";
@@ -885,7 +903,7 @@ int main(int argc, char **argv)
                     } else if (pce_state_load(&pce, path, ss.disc_id, err, sizeof err)) {
                         ach_load_progress(path);
                         if (have_rewind) rewind_reset(&rw, &pce);
-                        game_watch_reset(&gw, &pce);
+                        watch_reset();
                         pce.bram_dirty = false;
                         menu.open = false;
                         hold_input = true;
@@ -1023,7 +1041,7 @@ int main(int argc, char **argv)
                         ach_load_progress(path);
                         show_osd("State %d loaded", set.slot);
                         if (have_rewind) rewind_reset(&rw, &pce);
-                        game_watch_reset(&gw, &pce);
+                        watch_reset();
                         input_cancel_macros(&in);
                         pce.bram_dirty = false;
                     } else {
@@ -1083,6 +1101,7 @@ int main(int argc, char **argv)
         GameCheats cheats = {set.cheat_health, set.cheat_hearts, set.cheat_lives, set.maria_unlocked, set.play_maria};
         bool hardcore = ach_hardcore();
         if (hardcore) memset(&cheats, 0, sizeof cheats);   /* RetroAchievements' hardcore mode: none */
+        move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode};
         bool rewinding = false, ran_frame = false;
         if (menu_on_start_screen(&menu)) {
             /* the start screen: the game waits for Play (nothing runs, nothing sounds) */
@@ -1171,7 +1190,7 @@ int main(int argc, char **argv)
                 if (moved) {
                     pce_state_restore(&pce, rw.cur);
                     pce.pad = pad;
-                    run_frame();
+                    run_frame_as(false);
                     ran_frame = true;
                 }
                 pce.bram_dirty = false;            /* rewinding never overwrites the save file */
@@ -1181,7 +1200,7 @@ int main(int argc, char **argv)
                 if (was_rewinding) {               /* continue from the exact rewound state */
                     pce_state_restore(&pce, rw.cur);
                     pce.bram_dirty = false;
-                    game_watch_reset(&gw, &pce);
+                    watch_reset();
                     was_rewinding = false;
                     rewind_held_frames = 0;
                     input_cancel_macros(&in);
@@ -1193,6 +1212,7 @@ int main(int argc, char **argv)
                 }
                 if (press_start)                   /* the game's own skip: a new START every 8 frames */
                     pad = game_power_on_skippable(&pce) && (pce.frame & 7) < 4 ? PAD_RUN : 0;
+                pad = moves_pad(&moves, &pce, &move_opts, pad, !test_mode && !hold_input && input_attack_held(&in));
                 pce.pad = pad;
                 run_frame();
                 game_apply_cheats(&pce, &cheats, &gw);
@@ -1457,6 +1477,48 @@ int main(int argc, char **argv)
             if (t_ach_frame < 0) TLOG("features: RetroAchievements: the test achievement ($30 = 05, $31 = 01) NEVER TRIGGERED\n");
             else TLOG("features: RetroAchievements: the test achievement ($30 = 05, $31 = 01) triggered at frame %ld, %s\n",
                       t_ach_frame, t_ach_state ? "the game's state as it says" : "BUT THE STATE IS NOT THAT");
+            /* The Gameplay page's moves (moves.h), on for this alone, as the player would use
+             * them: Up and Attack (Up kept from the game) whips upward; Attack kept held hangs
+             * the whip, and forward on the d-pad swings it ahead. */
+            if (pce.wram[RONDO_CHARACTER] == 0) {
+                MoveOptions on = {true, true};
+                move_opts = on;
+                moves_reset(&moves);
+                int up_frames = 0, up_box = -999, limp_frames = 0, limp_ahead = -999, up_seen = 0;
+                bool up_shot = false;
+                for (int i = 0; i < 220; i++) {
+                    bool attack = i >= 124 && i < 190;
+                    uint8_t pad = (i >= 120 && i < 146 ? PAD_UP : 0) | (i >= 170 && i < 190 ? PAD_RIGHT : 0) | (attack ? PAD_II : 0);
+                    pce.pad = moves_pad(&moves, &pce, &on, pad, attack);
+                    if (attack) up_seen |= pce.pad & PAD_UP;
+                    run_frame();
+                    video_upload(&video, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+                    char path[1200];
+                    if (moves.draw && moves.dir == 2) {
+                        up_frames++;
+                        if (moves.whip > 0 && pce.wram[0x0A68 + moves.whip] == 6) up_box = -(int8_t)pce.wram[0x19E0 + moves.whip];
+                        if (!up_shot) {
+                            up_shot = true;
+                            video_draw(&video, &set);
+                            snprintf(path, sizeof path, "%s/moves_up.bmp", features_dir);
+                            screenshot(ren, path);
+                        }
+                    }
+                    if (moves.draw_limp) {
+                        limp_frames++;
+                        if (moves.whip > 0) limp_ahead = (int8_t)pce.wram[0x1930 + moves.whip];
+                        if (i == 168 || i == 189) {
+                            video_draw(&video, &set);
+                            snprintf(path, sizeof path, "%s/moves_limp_%s.bmp", features_dir, i == 168 ? "hanging" : "ahead");
+                            screenshot(ren, path);
+                        }
+                    }
+                }
+                move_opts = (MoveOptions){0};
+                TLOG("features: moves: the whip turned up on %d frames (its hitbox %d px above Richter), Up %s; "
+                     "held limp for %d frames, swung ahead to %d px\n", up_frames, up_box,
+                     up_seen ? "PASSED TO THE GAME" : "kept from the game", limp_frames, limp_ahead);
+            }
             /* the Language option, without asking: the other language's disc if installed */
             int from = ss.language;
             set.language = from == LANG_JA ? LANG_EN : LANG_JA;

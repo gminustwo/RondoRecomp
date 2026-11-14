@@ -54,7 +54,8 @@ which belong to the system layer.
 |---|---|
 | `pce.c` | memory map (Super RAM `$68-$7F`, CD RAM `$80-$87`, BRAM `$F7`, WRAM `$F8-$FB`, I/O `$FF`), interrupt controller, timer, joypad, scanline-timed frame loop (263 lines × 1365 master clocks) |
 | `video.c` | VCE palette; VDC registers, VRAM, VRAM/SATB DMA, raster/vblank interrupts, background + sprite scanline renderer |
-| `disc.c` | CUE + ISO/BIN/WAV reader addressed by absolute LBA |
+| `disc.c` | CUE + ISO/BIN/WAV reader, or a `.chd` through `chd.c`, addressed by absolute LBA |
+| `chd.c` | `.chd` images read in place: CHD v5, the `cdlz` / `cdzl` / `cdfl` codecs (docs/distribution.md, CHD) |
 | `bios_hle.c` | System Card functions in C, run when the CPU reaches a jump-table address |
 
 Bank `$00` holds a small ROM of our own: the interrupt stubs follow the System Card's dispatch
@@ -219,9 +220,12 @@ for the game every 8 frames where it looks (`game_power_on_skippable`) until the
 is up: about 0.3 s from power-on. The title screen is silent either way; the game starts its
 attract sequence about 14 s later.
 
-Cheats (`game.c`): health losses are undone while playing (state `$05`); hearts are kept at
-99 while playing, unless they drop more than 12 times a second (a tally), then left alone
-until 3 quiet seconds pass or the state changes; lives losses are undone outside the menus.
+Cheats (`game.c`): health losses are undone while playing (state `$05`) and hearts are kept at
+99 while playing, unless either drops more than 12 times a second: that is the stage's end
+counting health, then hearts, into the score a step a frame (docs/findings.md, "End of a
+stage"), which only goes on once each is 0. That value is then left alone until 3 quiet
+seconds pass or the state changes (`GameTally`). Lives losses are undone outside the menus.
+`build/cheat_test` plays the stage's end and some hits and sub-weapon throws against them.
 Maria unlocked sets bit 0 of `$1F40` (the current save record) while playing; Play as Maria
 sets the character byte `$9F` to 1 whenever a stage may be loading (outside gameplay and
 while a stage sets up), so every stage loads Maria's code, the Prologue included.
@@ -231,6 +235,42 @@ for Richter, ±$0160 for Maria; Richter's jumps ±$0150). While the run button i
 exact values in the facing direction are scaled by 2.3 / 1.25 (SotN's run against its walk,
 which equals Rondo's), and the walk animation's frame timer gets an extra step on 5 frames
 of 6. The game's own movement code then handles walls, stairs and the camera.
+
+Super Castlevania IV moves (`moves.c`, Gameplay page, off by default and in hardcore mode;
+the ideas from Pizzano's Super Rondo of Blood hack, none of its code): with "8-way whip and
+doves" Attack aims where the d-pad points (up, up and ahead; in the air also down and down
+and ahead); with "Limp whip" Attack kept held after a whip hangs it from Richter's hand.
+Up + II is the game's sub-weapon throw, so while Attack is held the game is not given Up
+(`moves_pad`; the Sub-weapon control's own Up + II still throws), and while the whip hangs
+it is given no direction at all (on the attack's last frame the game takes one as the end
+of the attack). The game itself stays as it is; around each frame (docs/findings.md, "The
+whip"):
+
+- The whip's direction is the d-pad's while it winds up (whip frames before 05), kept
+  through the strike (05-07). For each frame of a turned strike the strike's three box
+  entries in Richter's code (`$6E:DDE8`, picked by `$DD56`) are rewritten before the frame
+  and put back after it, so the game's own `$DD1F` gives the whip a box turned round
+  Richter's hand (cut down by a fifth on the diagonals), and no save state or rewind step
+  keeps them. Crouching and stair whips stay ahead.
+- The strike's sprites (patterns `$1A0`-`$1AF` near Richter; palette 1, flashing through 3
+  and 4) are left out of that frame's picture (`vdc_set_sprite_hide`, as `prompt.c` does)
+  and drawn into it turned round the hand, from their own pixels in VRAM (each picture pixel
+  takes the source pixel it turns back to).
+- The limp whip holds Richter's and the whip's animation timers (`$0F90`) at 4 while
+  Attack is held on the strike's last frame, as a state of standing or jumping attack; it
+  is 8 links of 6 pixels (the last a 10-pixel tip) cut from the straight whip, the first
+  turning towards the d-pad by 0.22 rad a frame (hanging straight down with none) and each
+  next following the one before at 45% a frame. Its box (half 8 x 8) is on the tip.
+  Letting go sets both timers to 1: the attack ends on the next frame, as it would have.
+- A dove of Maria's flying out (its state 0) gets, after each frame, what its velocity
+  turned to the aimed direction adds to its position; the game slows it and brings it back
+  as usual.
+
+While rewinding nothing of this runs (the frames are shown as the game drew them). The
+features test (`--autotest-features`) turns both on in Stage 1: an upward whip, then the
+whip held limp and swung ahead, logged (`features: moves: ...`) and photographed
+(`moves_up.bmp`, `moves_limp_hanging.bmp`, `moves_limp_ahead.bmp`). `rondo_headless --moves
+eight,limp` plays them with the pad's II as Attack.
 
 The title screen's prompt (`prompt.c`): the game's "PUSH RUN BUTTON!" (six sprites in
 palette 7 at Y 136, the same on both discs) reads "PUSH START BUTTON!" with a controller
@@ -304,7 +344,17 @@ follow the real clock.
 Profile: settings, saves, states and the remembered disc live in the pref folder
 (`%APPDATA%\RondoRecomp\RondoRecomp`), or in the folder named by the `RONDORECOMP_PROFILE`
 environment variable (`locate_profile_dir`), which Setup and rondo.exe started from each
-other inherit: a whole separate player, e.g. to go through the first run again.
+other inherit: a whole separate player, e.g. to go through the first run again. Without that
+variable, a folder named `user` next to the game makes it portable: the profile is that
+folder (on Linux's AppImage, `user` next to the AppImage file, from `RONDO_APPIMAGE`, since
+the game itself runs from `RONDO_HOME`; `rondo_user_dir` in `programs.h`, shared with Setup).
+The game copies nothing into it, and updates never touch it. Setup's Portable checkbox
+(`tools/setup/portable.c`; `rondo_setup --portable on|off`) makes it, offering to copy the
+pref folder's contents in (they are left there), and retires it: an empty one is removed,
+one with something in it is copied back to the pref folder, files there replaced, and
+renamed `user.old` (`user.old2` ...). The pref folder is worked out from `%APPDATA%` (on
+Linux `$XDG_DATA_HOME` or `~/.local/share`) as SDL_GetPrefPath gives it, without that call,
+which would make it.
 The build copies `SDL3.dll` and `libiconv-2.dll` next to the executable (on Linux
 `libSDL3.so.0`, found through the programs' RUNPATH, `$ORIGIN`).
 
@@ -362,10 +412,13 @@ build/rondo_headless <game.cue> --frames 3000 --shot-every 150 --out work/shots 
 
 Investigation options: `--script` (the capture input script), `--ram 30,94,98` (print those
 work-RAM bytes whenever one changes), `--poke ADDR=VAL` (write before every frame),
-`--save-state FRAME:FILE` / `--load-state FILE` (start later runs mid-game), `--dump-ram
+`--save-state FRAME:FILE` / `--load-state FILE` (start later runs mid-game; a state rondo.exe
+saved also needs `--state-disc DB4D9415EC501573`, the disc id it was saved with), `--dump-ram
 FRAME:FILE`, `--ram-trace FILE` (work RAM + pad after every frame, for offline searches),
 `--cheats health,hearts,lives,maria,play-maria` and `--skip-cinematics` (the frontend's
-`game.c`), `--run FRAME:LEN` (hold the run button), `--prompt pad|keys` (the title's
+`game.c`), `--every FROM:TO:PERIOD:BUTTONS[:LEN]` (press for LEN frames every PERIOD frames;
+PERIOD 1 holds), `--run FRAME:LEN` (hold the run button), `--moves eight,limp` (the 8-way
+and limp whip, `moves.c`, II being Attack), `--prompt pad|keys` (the title's
 prompt as rondo.exe shows it), `--row-scroll A:B` (each frame's bands of rows by X scroll),
 `--write-watch ADDR,...` (which
 instruction changes those work-RAM bytes; interpreter), `--vram-watch LO:HI` (which

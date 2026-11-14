@@ -29,6 +29,8 @@ typedef struct Settings {
     bool rewind;
     int volume;            /* 0-10 */
     bool start_screen;     /* show the start screen before the game (rondo.exe --play skips it once) */
+    bool eight_way;        /* Richter's whip and Maria's doves in 8 directions (moves.h) */
+    bool limp_whip;        /* Richter's whip hangs while Attack is held (moves.h) */
     int slot;              /* save-state slot 1-9 */
     /* cheats */
     bool cheat_health, cheat_hearts, cheat_lives;
@@ -36,7 +38,7 @@ typedef struct Settings {
     bool play_maria;       /* every stage, the Prologue too, played as Maria */
     /* language: which disc image to run */
     int language;          /* LANG_* */
-    char disc_ja[1024];    /* the Japanese disc image (.cue) the player chose, if not installed by Setup */
+    char disc_ja[1024];    /* the Japanese disc image (.cue or .chd) the player chose, if not installed by Setup */
     char disc_en[1024];    /* the same for the English (translated) disc */
     /* RetroAchievements (achievements.h): the account's name and login token (never the
      * password), whether achievements are on, and hardcore mode */

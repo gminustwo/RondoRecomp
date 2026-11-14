@@ -2,6 +2,7 @@
 #   sdk/sources.txt          runtime + frontend sources to compile (relative to sdk/), and
 #                            -I (relative to sdk/) and -D options for them
 #   sdk/src/rcheevos/...     RetroAchievements' client library (third_party/rcheevos)
+#   sdk/src/lzma/...         the LZMA SDK's LZMA decoder, for .chd images (third_party/lzma)
 #   sdk/src/runtime/...      runtime sources and headers
 #   sdk/src/frontend/...     windowed frontend
 #   sdk/include/SDL3/        SDL3 headers
@@ -18,6 +19,7 @@ set(RUNTIME_SOURCES
   runtime/pce/pce.c
   runtime/pce/video.c
   runtime/pce/disc.c
+  runtime/pce/chd.c
   runtime/pce/discid.c
   runtime/pce/bios_hle.c
   runtime/pce/kanji_font.c
@@ -29,6 +31,7 @@ set(FRONTEND_SOURCES
   tools/frontend/main.c
   tools/frontend/locate.c
   tools/frontend/game.c
+  tools/frontend/moves.c
   tools/frontend/prompt.c
   tools/frontend/input.c
   tools/frontend/binds.c
@@ -53,6 +56,10 @@ file(COPY "${SRC}/tools/frontend/" DESTINATION "${OUT}/src/frontend"
      FILES_MATCHING PATTERN "*.c" PATTERN "*.h")
 file(COPY "${SRC}/third_party/rcheevos/include" "${SRC}/third_party/rcheevos/src" "${SRC}/third_party/rcheevos/LICENSE"
      DESTINATION "${OUT}/src/rcheevos")
+# the LZMA SDK's LZMA decoder (.chd images, runtime/pce/chd.c)
+foreach(f LzmaDec.c LzmaDec.h 7zTypes.h Precomp.h Compiler.h)
+  file(COPY "${SRC}/third_party/lzma/${f}" DESTINATION "${OUT}/src/lzma")
+endforeach()
 # the capture input script, used by rondo.exe --autotest-features
 file(COPY "${SRC}/tools/recomp/capture_script.h" DESTINATION "${OUT}/src/frontend")
 file(COPY "${SDL_INC}/SDL3" DESTINATION "${OUT}/include")
@@ -67,6 +74,8 @@ endforeach()
 
 set(list "# compiled by Setup together with build/gen/*.c (-I paths are relative to sdk/)\n")
 string(APPEND list "-Isrc/rcheevos/include\n")
+string(APPEND list "-Isrc/lzma\n")
+string(APPEND list "src/lzma/LzmaDec.c\n")
 foreach(d ${RCHEEVOS_DEFINES})
   string(APPEND list "-D${d}\n")
 endforeach()

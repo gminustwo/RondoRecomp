@@ -151,6 +151,56 @@ Richter walks at $0140 (1.25 px a frame), jumps at $0150, Maria walks and jumps 
 walking speed is set once as a walk starts (a two-entry table by facing in Richter's code).
 Forcing $9F = 1 before Stage 0 loads plays the Prologue as Maria.
 
+## The whip
+
+Found for the Super Castlevania IV moves (`tools/frontend/moves.c`).
+
+Objects 0-15 are the player and the player's weapons; more of their arrays (work RAM
+offsets, 88 slots each): `$0A10` in use, `$0A68` animation frame, `$0AC0` facing, X
+`$0B70` / `$0BC8` / `$0C20` (high, low, below the pixel) and Y `$0C78` / `$0CD0` / `$0D28`
+(picture coordinates: the sprite table's, and the picture's pixels), velocity `$0D80` /
+`$0DD8` and `$0E30` / `$0E88` (8.8), `$0EE0` state, `$0F90` animation timer, `$1828` kind
+(5: the whip or a dove), `$1250` can be hit, and the hitbox: `$1930` centre ahead of X
+(negated when facing left), `$19E0` centre below Y, `$1988` half width, `$1A38` half
+height. The collision code (`$6B:9413` puts the player's objects' box centres in `$2710` /
+`$2720`; `$6B:9466` checks each enemy against them) counts a hit when both distances are
+under the sums of the half sizes, and stores the enemy's slot in the weapon's `$1880`.
+
+Richter's states (`$0EE0` of object 0): 01 standing, 03 attacking, 06 crouching attack, 0A
+jumping, 0B jumping attack. His whip is object 3 at his own X and Y (a frame late in a
+jump), frames 02-04 winding up, 05-07 the strike (09-0E crouching; 1E, 1F winding up in a
+jump, then 04-07). Its box comes from Richter's code (bank `$6E` at `$C000`, the same in
+the stages tried, Stage 1 and area `$14`): `$DD1F` looks the frame up in `$DD56` and copies
+the entry at `$DDE8` + 4 x entry (X ahead, Y, half width, half height) when the frame
+changes; the strike's entries
+are `0F F5 0F 05`, `20 F5 18 03` and `28 F5 20 03` (40 pixels ahead, 11 up, 64 wide).
+Its sprites are patterns `$1A0`-`$1AF` (16 x 16, some 32 wide) in palette 1, the last frame
+flashing through palettes 3 and 4; the sprite table after a frame matches the RAM after it.
+Holding the attack's animation timers (`$0F90` of objects 0 and 3) at 4 keeps Richter and
+the whip in the strike's last frame for as long as they are held; let go, both end as usual.
+A direction pressed then ends the attack early (into a walk).
+
+Maria's dove (object kind 5) flies out at X speed `$0450` (4.3 pixels a frame) slowing by
+`$0030` a frame, state 0, then (state 1, 2) turns back and homes in on her.
+
+## End of a stage
+
+Each stage's data block on the disc (13 of them, 352 sectors apart in the data track, from
+sector 1696 of the English disc's track 2) starts with a program loaded at `$9000` in bank 6B.
+Its part at `$933F` is the stage's end, a state machine in zp `$80`, run each frame through
+`JSR $8000` by main state `$05` (the `$69:510E` table: state 5 is `69:5265`). Its steps
+(`$934E` table): 0 `935E` sound, 1 `938B` a text window with the health and hearts, saves the
+hearts in `$350D`, and sets `$2ABB` when the health bar is full; 2 `9403` reveals the window;
+3 `9513`; 4 `951E` the tally: each frame, health `$98` down 1 while above 0, then hearts `$94`
+down 1 (BCD) while above 0, each step adding to the score (`JSR $408A`; an extra life when it
+passes a mark); 5 `9573` and 6 `9587` an extra life for a full bar (`$2ABB`); 7 `95AA` puts the
+hearts back from `$350D` and sets `$37`, which main state 5 turns into the area change (state
+`$06`, `69:54B7`). `$3510` holds each step back for that many frames (`95B5`).
+
+So the end needs health and hearts to reach 0 in the playing state: a cheat that undoes every
+loss of health there stops the stage from ending (issue 6). `game.c` lets either be counted
+down once it drops more than 12 times in a second, which damage and sub-weapons never do.
+
 ## Camera, scrolling and objects
 
 Found for the widescreen option (0.6 to 0.12; taken out in 0.13, see git history for

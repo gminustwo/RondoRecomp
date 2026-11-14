@@ -14,11 +14,11 @@
 #include "../frontend/http.h"
 #include "../frontend/programs.h"
 #include "../frontend/update.h"
+#include "portable.h"
+#include "setup.h"
 #include "vc.h"
 
 int setup_main(int argc, char **argv);
-extern void (*setup_line_hook)(const char *text);
-extern void (*setup_progress_hook)(const char *what, int pct);
 
 enum { IDLE, RUNNING, DONE, FAILED };
 enum { MODE_IMPORT, MODE_REBUILD, MODE_UPDATE };
@@ -157,7 +157,7 @@ static bool exists(const char *name)
 }
 
 typedef struct Button { float x, y, w, h; const char *label; int id; } Button;
-enum { B_CHOOSE = 1, B_FOLDER, B_PLAY, B_REBUILD, B_QUIT, B_UPDATE };
+enum { B_CHOOSE = 1, B_FOLDER, B_PLAY, B_REBUILD, B_QUIT, B_UPDATE, B_PORTABLE };
 
 static bool hit(const Button *b, float mx, float my)
 {
@@ -183,6 +183,69 @@ static void draw_button(SDL_Renderer *r, const Button *b, bool hover)
 static char play_after[1100];
 #endif
 static const char *play_arg;   /* --autotest-play: the game's --autotest */
+
+static SDL_EnumerationResult SDLCALL any_file(void *userdata, const char *dir, const char *name)
+{
+    (void)dir;
+    (void)name;
+    *(bool *)userdata = true;
+    return SDL_ENUM_SUCCESS;
+}
+
+static bool has_user_files(const char *dir)
+{
+    bool any = false;
+    SDL_EnumerateDirectory(dir, any_file, &any);
+    return any;
+}
+
+/* The Portable checkbox (portable.h): turned on, it makes the user folder and offers to copy
+ * the settings and saves the game has had so far into it; turned off, it copies them back
+ * (after asking) and keeps the folder as user.old. */
+static void toggle_portable(SDL_Window *win)
+{
+    char user[1024], appdata[1024], msg[2600];
+    rondo_user_dir(user, sizeof user);
+    bool files = false, have_appdata = portable_appdata(appdata, sizeof appdata, &files);
+    int choice = 1;
+    bool ok;
+    if (!portable_on()) {
+        if (have_appdata && files) {
+            snprintf(msg, sizeof msg,
+                     "Portable mode keeps the game's settings, saves and save states in a folder named "
+                     "user next to it:\n%s\n\nCopy the ones it has now (in %s) into it? They are left "
+                     "where they are as well.", user, appdata);
+            const SDL_MessageBoxButtonData b[] = {
+                {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Copy them"},
+                {0, 2, "Start fresh"},
+                {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
+            };
+            const SDL_MessageBoxData box = {SDL_MESSAGEBOX_INFORMATION, win, "Portable mode", msg, 3, b, NULL};
+            if (!SDL_ShowMessageBox(&box, &choice)) choice = 1;   /* (no dialogs here: copying keeps both) */
+        }
+        if (!choice) return;
+        ok = portable_enable(choice == 1);
+    } else {
+        if (!have_appdata) {
+            snprintf(dialog_error, sizeof dialog_error, "Portable mode stays on: no other place for the saves.");
+            return;
+        }
+        snprintf(msg, sizeof msg,
+                 "Without portable mode the game keeps its settings and saves in:\n%s\n\nThe ones in the "
+                 "user folder are copied there (replacing what is there), and the folder is kept, renamed "
+                 "user.old.", appdata);
+        const SDL_MessageBoxButtonData b[] = {
+            {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Turn it off"},
+            {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
+        };
+        const SDL_MessageBoxData box = {SDL_MESSAGEBOX_INFORMATION, win, "Portable mode", msg, 2, b, NULL};
+        choice = 0;
+        if (has_user_files(user) && (!SDL_ShowMessageBox(&box, &choice) || !choice)) return;
+        ok = portable_disable();
+    }
+    if (ok) dialog_error[0] = 0;
+    else snprintf(dialog_error, sizeof dialog_error, "%.70s", g_err);
+}
 
 static bool play(void)
 {
@@ -226,7 +289,7 @@ int main(int argc, char **argv)
     if (!ren) return 1;
     SDL_SetRenderLogicalPresentation(ren, 640, 400, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    bool running = true;
+    bool running = true, portable = portable_on();
     float mx = 0, my = 0;
     Uint64 t0 = SDL_GetTicks();
     if (auto_rebuild && exists("game")) start(MODE_REBUILD);
@@ -261,7 +324,7 @@ int main(int argc, char **argv)
         bool can_update = update_state(&news, NULL) == UPD_AVAILABLE && !updated && have_game;
         static char update_label[40];
         if (can_update) snprintf(update_label, sizeof update_label, "Update to %s", news->version);
-        Button buttons[6];
+        Button buttons[7];
         int nb = 0;
         if (can_update && st != RUNNING) buttons[nb++] = (Button){456, 10, 160, 22, update_label, B_UPDATE};
         if (st == IDLE || st == DONE || st == FAILED) {
@@ -271,6 +334,7 @@ int main(int argc, char **argv)
             if (have_exe && st != FAILED) buttons[nb++] = (Button){320, 340, 90, 32, "Play", B_PLAY};
             if (have_game && st != DONE) buttons[nb++] = (Button){418, 340, 100, 32, "Rebuild", B_REBUILD};
             buttons[nb++] = (Button){526, 340, 90, 32, "Quit", B_QUIT};
+            buttons[nb++] = (Button){24, 378, 592, 16, NULL, B_PORTABLE};   /* the checkbox's row */
         }
 
         SDL_Event ev;
@@ -298,6 +362,9 @@ int main(int argc, char **argv)
                         if (play()) running = false;
                     } else if (buttons[i].id == B_QUIT) {
                         running = false;
+                    } else if (buttons[i].id == B_PORTABLE) {
+                        toggle_portable(win);
+                        portable = portable_on();
                     }
                 }
             }
@@ -381,7 +448,23 @@ int main(int argc, char **argv)
                                                   ? "Setup needs your console's key file: choose it (Setup then goes on)."
                                                   : "Setup did not finish; see the messages above.");
         }
-        for (int i = 0; i < nb; i++) draw_button(ren, &buttons[i], hit(&buttons[i], mx, my));
+        for (int i = 0; i < nb; i++) {
+            if (buttons[i].id != B_PORTABLE) {
+                draw_button(ren, &buttons[i], hit(&buttons[i], mx, my));
+                continue;
+            }
+            bool hover = hit(&buttons[i], mx, my);
+            SDL_FRect box = {24, 380, 12, 12};
+            SDL_SetRenderDrawColor(ren, 200, 170, 120, 255);
+            SDL_RenderRect(ren, &box);
+            if (portable) {
+                SDL_FRect tick = {27, 383, 6, 6};
+                SDL_RenderFillRect(ren, &tick);
+            }
+            SDL_SetRenderDrawColor(ren, hover ? 255 : 200, hover ? 230 : 190, hover ? 170 : 170, 255);
+            SDL_RenderDebugText(ren, 44, 382, rondo_appimage() ? "Portable: settings and saves next to the AppImage (user)"
+                                                               : "Portable: settings and saves in this folder (user)");
+        }
         SDL_RenderPresent(ren);
         SDL_Delay(16);
     }

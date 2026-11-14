@@ -237,7 +237,7 @@ static bool materialize(const char *cue, GenStats *st, char *err, int err_len)
 {
     Pce *p = malloc(sizeof(Pce)), *s0 = malloc(sizeof(Pce));
     if (!p || !s0) { snprintf(err, (size_t)err_len, "out of memory"); return false; }
-    if (!pce_init(p, cue, err, err_len) || !pce_boot(p, err, err_len)) { free(p); free(s0); return false; }
+    if (!pce_init(p, cue, err, err_len) || !pce_boot(p, err, err_len)) { pce_close(p); free(p); free(s0); return false; }
     recomp_set_enabled(false);
     for (int f = 0; f < 40; f++) pce_run_frame(p);       /* boot + main init (groups 0, 4, 6) */
     collect(p);
@@ -269,6 +269,7 @@ static bool materialize(const char *cue, GenStats *st, char *err, int err_len)
             }
         }
     }
+    pce_close(p);   /* (s0 shares its disc) */
     free(s0);
     free(p);
     st->images = n_images;

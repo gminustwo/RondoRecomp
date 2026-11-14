@@ -1,6 +1,7 @@
 /* See discid.h. */
 #include "discid.h"
 
+#include <stdbool.h>
 #include <string.h>
 
 #include "disc.h"
@@ -33,9 +34,9 @@ DiscKind discid_identify(const char *cue_path, uint64_t *fingerprint)
     for (int i = 0; i < disc.n_tracks; i++)
         if (disc.tracks[i].data) { t = &disc.tracks[i]; break; }
     uint8_t boot[2048];
-    if (!t || !disc_read_data(&disc, t->lba + 1, 1, sec) || !disc_read_data(&disc, t->lba + 2, 1, boot))
-        return DISC_INVALID;
-    return discid_identify_sectors(sec, boot, fingerprint);
+    bool read = t && disc_read_data(&disc, t->lba + 1, 1, sec) && disc_read_data(&disc, t->lba + 2, 1, boot);
+    disc_close(&disc);
+    return read ? discid_identify_sectors(sec, boot, fingerprint) : DISC_INVALID;
 }
 
 DiscKind discid_identify_sectors(const uint8_t *sector1, const uint8_t *sector2, uint64_t *fingerprint)
@@ -58,11 +59,13 @@ DiscLanguage discid_language(const char *cue_path)
     const DiscTrack *t = NULL;
     for (int i = 0; i < disc.n_tracks; i++)
         if (disc.tracks[i].data) { t = &disc.tracks[i]; break; }
-    if (!t) return DISC_LANG_UNKNOWN;
+    bool read = t != NULL;
     uint64_t h = 0xcbf29ce484222325ull;
-    for (int i = 5; i <= 10; i++) {
-        if (!disc_read_data(&disc, t->lba + i, 1, sec)) return DISC_LANG_UNKNOWN;
+    for (int i = 5; i <= 10 && read; i++) {
+        read = disc_read_data(&disc, t->lba + i, 1, sec);
         h = fnv1a_more(h, sec, sizeof sec);
     }
+    disc_close(&disc);
+    if (!read) return DISC_LANG_UNKNOWN;
     return h == ORIGINAL_JA_TEXT ? DISC_LANG_JA : DISC_LANG_EN;
 }

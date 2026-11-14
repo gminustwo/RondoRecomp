@@ -9,7 +9,8 @@ What you need
 -------------
 Your disc image: the .cue file together with the track files it lists (.bin, .img, .iso
 and/or .wav), either zipped (the files may be inside a folder in the zip; a .7z works
-too) or unzipped in a folder of their own. A .chd (made with chdman) works as well.
+too) or unzipped in a folder of their own. A .chd (made with chdman) works as well, and
+the game plays it as it is: it takes about half the space of the unpacked tracks.
 Either disc works: the original Japanese release (Akumajou Dracula X: Chi no Rondo) or
 the English fan translation. With both, you can switch languages in the game.
 The Virtual Console releases work too (see Virtual Console below): the Wii's .wad (the
@@ -101,7 +102,8 @@ Japanese original are the same game there. To earn them:
    earn pops up as it unlocks, and leaderboard attempts show their progress at the top right.
    The page shows your account and the game's progress.
 Hardcore mode (off by default) is RetroAchievements' stricter way to play: while it is on,
-loading save states, rewind, the cheats and Richter's run (hold LB) are off, and unlocks
+loading save states, rewind, the cheats, Richter's run (hold LB) and the 8-way and limp
+whip are off, and unlocks
 count as hardcore. Switching it on restarts the game. Without a connection the game plays
 as usual; unlocks made offline are sent when it is back.
 
@@ -216,9 +218,19 @@ Gameplay   Skip cinematics: Press START, Automatically, or Never. During the log
            has shown them; Automatically goes there at once. Story scenes in the game have
            no skip of their own: START (or Automatically) runs them through fast instead
            Rewind on/off, volume, Start screen at launch on/off
+           8-way whip and doves (off by default): hold a direction as you attack and
+           Richter whips that way, as in Super Castlevania IV: up, up and ahead, and in
+           the air down and down and ahead; Maria throws her doves the same way. Up and
+           Attack then no longer throws the sub-weapon: use the Sub-weapon control
+           Limp whip (off by default): keep Attack held after Richter's whip and it hangs
+           from his hand; the d-pad swings it round (it still hurts what it touches) and
+           letting go of Attack ends it. Ideas from Pizzano's Super Rondo of Blood hack,
+           made anew for RondoRecomp (none of the hack is used)
 RetroAchievements
            On / off, hardcore mode, your account (see RetroAchievements above)
-Cheats     Infinite health, infinite hearts (always 99), infinite lives
+Cheats     Infinite health, infinite hearts (always 99), infinite lives. At a stage's end
+           the game still counts your health and hearts down into the score, as it
+           always does; the next stage starts with them full again
            Maria unlocked: the game offers Maria as it does after you rescue her in Stage 2
            (and your save keeps it)
            Play as Maria: every stage is played as Maria, the Prologue too (starts from the
@@ -226,7 +238,8 @@ Cheats     Infinite health, infinite hearts (always 99), infinite lives
 Language   English patch or Japanese original (each is its own disc; see below)
 
 Options are kept in %APPDATA%\RondoRecomp\RondoRecomp\settings.ini (on Linux in
-~/.local/share/RondoRecomp/RondoRecomp/settings.ini).
+~/.local/share/RondoRecomp/RondoRecomp/settings.ini), or in the user folder in portable
+mode (see Portable mode below).
 
 Your own icon (Windows)
 -----------------------
@@ -245,13 +258,27 @@ To keep a separate set (options, saves, states), set the environment variable
 RONDORECOMP_PROFILE to a folder before starting Setup or rondo.exe; your usual ones are
 left alone.
 
+Portable mode
+-------------
+To keep options, saves and save states with the game instead (on a USB stick, say), tick
+"Portable" at the bottom of Setup's window. Setup makes a folder named "user" next to
+rondo.exe and offers to copy the options and saves you have so far into it (they stay in
+%APPDATA% too); from then on the game uses that folder and nothing in %APPDATA%, so the
+whole folder can be moved anywhere. Untick it to go back: Setup copies what is in user back
+to %APPDATA%\RondoRecomp\RondoRecomp (replacing what is there) and keeps the folder,
+renamed user.old. Making the user folder yourself does the same as ticking the box (copy
+settings.ini, bram.bin, bram-ja.bin and the states folder into it to bring yours along).
+Updates leave the user folder alone. On Linux the user folder is next to the AppImage; it
+holds your options, saves and states, while the game Setup builds stays in
+~/.local/share/RondoRecomp/install. RONDORECOMP_PROFILE, if set, still comes first.
+
 Japanese and English
 --------------------
 The game's text and subtitles come from the disc image: Japanese is the original disc
 (Akumajou Dracula X: Chi no Rondo), English is the fan translation of it. rondo.exe starts
 with whichever disc Setup installed (the language chosen in the menu, if both are). Menu,
 Language switches and restarts the game; if that language's disc is not installed, it asks
-for its .cue file once and remembers it. The Japanese story text uses the System Card's
+for its .cue (or .chd) file once and remembers it. The Japanese story text uses the System Card's
 kanji font, which RondoRecomp supplies (Shinonome, a public-domain bitmap font), so no
 System Card image is needed. Both discs run the same recompiled code.
 
@@ -269,6 +296,9 @@ rondo_setup.exe <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad> [
 rondo_setup.exe --rebuild                 recompile again with misses.txt
 rondo_setup.exe --update                  install the latest version from GitHub (--check:
                                           only say whether there is one)
+rondo_setup.exe --portable on|off         portable mode on or off, as Setup's checkbox
+                                          (on copies your options and saves in; off copies
+                                          them back and keeps the folder as user.old)
 (on Linux: the AppImage with --setup-cli, then the same options)
 
 Status

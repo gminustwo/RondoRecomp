@@ -226,7 +226,7 @@ static void RC_CCONV on_event(const rc_client_event_t *e, rc_client_t *c)
 }
 
 /* ---- the disc's hash (RetroAchievements' PC Engine CD method) through the runtime's disc
- * reader, which takes every image the game does (BIN, IMG, ISO + WAV) -------------------- */
+ * reader, which takes every image the game does (BIN, IMG, ISO + WAV, CHD) --------------- */
 
 typedef struct Track {
     Disc disc;
@@ -247,7 +247,7 @@ static void *RC_CCONV cd_open(const char *path, uint32_t track)
                                                 : (uint32_t)t->number == track)
             h->t = t;
     }
-    if (!h->t) { free(h); return NULL; }
+    if (!h->t) { disc_close(&h->disc); free(h); return NULL; }
     return h;
 }
 
@@ -261,7 +261,11 @@ static size_t RC_CCONV cd_read(void *handle, uint32_t sector, void *buffer, size
     return requested;
 }
 
-static void RC_CCONV cd_close(void *handle) { free(handle); }
+static void RC_CCONV cd_close(void *handle)
+{
+    disc_close(&((Track *)handle)->disc);
+    free(handle);
+}
 static uint32_t RC_CCONV cd_first_sector(void *handle) { return (uint32_t)((Track *)handle)->t->lba; }
 
 static bool hash_disc(const char *cue, char hash[33])

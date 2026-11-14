@@ -47,12 +47,19 @@ typedef struct GameCheats {
     bool play_maria;           /* every stage, the Prologue too, is played as Maria */
 } GameCheats;
 
+/* A value the game is counting down, a step every frame: at a stage's end it turns the health
+ * left, then the hearts, into score, and goes on only once each is 0 (docs/findings.md, "End
+ * of a stage"). Damage and sub-weapons never take more than a step or two a second. */
+typedef struct GameTally {
+    uint8_t drops[60];         /* went down on frame (mod 60) */
+    int quiet_frames;          /* frames since it last went down */
+    bool running;              /* the cheat leaves the value alone */
+} GameTally;
+
 /* Per-session bookkeeping for the cheats. */
 typedef struct GameWatch {
     uint8_t last_state, last_health, last_lives, last_hearts;
-    uint8_t heart_drops[60];   /* hearts went down on frame (mod 60): tally guard */
-    int quiet_frames;          /* frames since hearts last went down */
-    bool hearts_suspended;
+    GameTally health_tally, hearts_tally;
     bool maria_forced;         /* play_maria set the character; undo it when turned off */
     int run_from;              /* run: the walking/jumping speed the run replaced (0 = none) */
 } GameWatch;

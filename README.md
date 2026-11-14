@@ -36,7 +36,9 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Full suite of video options including filters and screen effects
 - Save stating
 - Cheats
+- Super Castlevania IV moves (Gameplay page): 8-way whipping and dove throwing, and a limp whip, after Pizzano's Super Rondo of Blood hack (RondoRecomp's own version)
 - RetroAchievements
+- Portable mode: tick Portable in Setup (or make a `user` folder next to `rondo.exe` or the AppImage) and options, saves and states are kept there
 
 ## Analysis tools
 
@@ -79,7 +81,8 @@ Findings so far: [docs/findings.md](docs/findings.md).
 - Windows and Linux (x86-64, glibc 2.35 or newer: the Steam Deck, Ubuntu 22.04, Debian 12,
   Fedora 36, Arch and later).
 - Setup takes the disc image zipped, as a 7z, unzipped or as a `.chd` (MAME's compressed CD
-  format), or the Virtual Console releases:
+  format, which the game reads as it is: about half the space; see
+  [docs/distribution.md](docs/distribution.md#chd)), or the Virtual Console releases:
   the Wii's `.wad` (the Japanese game) and the Wii U's title (WUP, the English translation),
   with the console key the player supplies, or a `.wad` installed in Dolphin. See
   [docs/distribution.md](docs/distribution.md#virtual-console).
@@ -99,7 +102,7 @@ non-Steam game. See [docs/PLAYER_README.txt](docs/PLAYER_README.txt) and
 ## Layout
 
 - `runtime/cpu/` HuC6280 interpreter and shared instruction semantics
-- `runtime/pce/` PC Engine system, video, disc, backup RAM, System Card replacement
+- `runtime/pce/` PC Engine system, video, disc (cue sheets, and .chd images read in place), backup RAM, System Card replacement
 - `runtime/recomp/` native-code dispatch and verification
 - `tests/` conformance test runners
 - `tools/pce/` platform code: disc access, HuC6280 decoder, System Card table, banked code explorer

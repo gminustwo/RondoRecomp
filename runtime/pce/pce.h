@@ -79,7 +79,11 @@ typedef struct Pce {
     void *on_step_ctx;
 } Pce;
 
+/* `cue`: the disc image, a .cue or a .chd (disc.h). Close a machine started before
+ * starting it again. */
 bool pce_init(Pce *p, const char *cue, char *err, int err_len);
+/* Closes its disc (a .chd stays open while the machine runs). */
+void pce_close(Pce *p);
 /* Diagnostics only: map a real System Card image (banks $00-$1F) and disable the
  * C replacements, so the original reset code can be observed. */
 bool pce_map_real_bios(Pce *p, const char *path, char *err, int err_len);

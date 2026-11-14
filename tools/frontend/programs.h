@@ -3,9 +3,12 @@
 #pragma once
 
 #include <SDL3/SDL.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 
 /* The release's version (Setup, the game's User-Agent for RetroAchievements, the packages) */
-#define RONDO_VERSION "1.1"
+#define RONDO_VERSION "1.2"
 /* The compiler the release carries (zig/, tools/fetch_zig.sh): an update without it (update.h)
  * is for installations that have this one */
 #define RONDO_ZIG_VERSION "0.17.0"
@@ -50,4 +53,36 @@ static inline const char *rondo_appimage(void)
 #else
     return rondo_env_dir("RONDO_APPIMAGE");
 #endif
+}
+
+/* Portable mode (locate.h): the folder named user that the game keeps its profile in when it
+ * is there, next to the game (on Linux's AppImage, next to the AppImage file, the game itself
+ * being built in a folder of the player's); no separator at the end. */
+static inline void rondo_user_dir(char *out, size_t n)
+{
+    const char *image = rondo_appimage(), *base = SDL_GetBasePath();
+    char dir[1024];
+    snprintf(dir, sizeof dir, "%s", image ? image : base ? base : "./");
+    size_t l = strlen(dir);
+    if (image)
+        while (l && dir[l - 1] != '/') dir[--l] = 0;   /* the AppImage's folder */
+    bool sep = l && (dir[l - 1] == '/' || dir[l - 1] == '\\');
+    snprintf(out, n, "%s%suser", dir, sep ? "" : "/");
+}
+
+/* The profile folder otherwise: SDL_GetPrefPath("RondoRecomp", "RondoRecomp")'s, worked out
+ * here (that call also makes it), ending in a separator. */
+static inline bool rondo_appdata_dir(char *out, size_t n)
+{
+#ifdef _WIN32
+    const char *a = SDL_getenv("APPDATA");
+    if (!a || !*a) return false;
+    snprintf(out, n, "%s\\RondoRecomp\\RondoRecomp\\", a);
+#else
+    const char *x = SDL_getenv("XDG_DATA_HOME"), *h = SDL_getenv("HOME");
+    if (x && *x) snprintf(out, n, "%s/RondoRecomp/RondoRecomp/", x);
+    else if (h && *h) snprintf(out, n, "%s/.local/share/RondoRecomp/RondoRecomp/", h);
+    else return false;
+#endif
+    return true;
 }

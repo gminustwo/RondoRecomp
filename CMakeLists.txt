@@ -14,10 +14,18 @@ endif()
 add_library(hucpu STATIC runtime/cpu/huc6280.c runtime/cpu/huc6280_info.c)
 target_include_directories(hucpu PUBLIC runtime)
 
+# the LZMA SDK's LZMA decoder (public domain): .chd images (runtime/pce/chd.c)
+add_library(lzmacore STATIC third_party/lzma/LzmaDec.c)
+target_include_directories(lzmacore PUBLIC third_party/lzma)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(lzmacore PRIVATE -w)
+endif()
+
 add_library(pce STATIC
   runtime/pce/pce.c
   runtime/pce/video.c
   runtime/pce/disc.c
+  runtime/pce/chd.c
   runtime/pce/discid.c
   runtime/pce/bios_hle.c
   runtime/pce/kanji_font.c
@@ -27,12 +35,13 @@ add_library(pce STATIC
   runtime/recomp/dispatch.c
   runtime/util/png.c)
 target_include_directories(pce PUBLIC runtime)
-target_link_libraries(pce PUBLIC hucpu)
+target_link_libraries(pce PUBLIC hucpu lzmacore)
 if(NOT WIN32)
   target_link_libraries(pce PUBLIC m)   # pow, fmod (Windows has them in its C library)
 endif()
 
-add_executable(rondo_headless tools/headless/main.c runtime/recomp/recomp_none.c tools/frontend/game.c tools/frontend/prompt.c)
+add_executable(rondo_headless tools/headless/main.c runtime/recomp/recomp_none.c tools/frontend/game.c tools/frontend/prompt.c
+  tools/frontend/moves.c)
 target_link_libraries(rondo_headless PRIVATE pce)
 
 # Code generator (developer front end; Setup links the same generator)
@@ -48,7 +57,7 @@ if(RONDO_GEN_DIR AND EXISTS "${RONDO_GEN_DIR}/table.c")
   add_library(rondogen STATIC ${RONDO_GEN_SOURCES})
   target_include_directories(rondogen PUBLIC runtime "${RONDO_GEN_DIR}")
   target_compile_options(rondogen PRIVATE -O1 -w)
-  add_executable(rondo_headless_rc tools/headless/main.c tools/frontend/game.c tools/frontend/prompt.c)
+  add_executable(rondo_headless_rc tools/headless/main.c tools/frontend/game.c tools/frontend/prompt.c tools/frontend/moves.c)
   target_link_libraries(rondo_headless_rc PRIVATE pce rondogen)
 endif()
 
@@ -67,7 +76,7 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
   target_compile_definitions(rcheevos PUBLIC ${RCHEEVOS_DEFINES})
   target_compile_options(rcheevos PRIVATE -w)
 
-  add_executable(rondo WIN32 tools/frontend/main.c tools/frontend/locate.c tools/frontend/game.c tools/frontend/prompt.c
+  add_executable(rondo WIN32 tools/frontend/main.c tools/frontend/locate.c tools/frontend/game.c tools/frontend/prompt.c tools/frontend/moves.c
     tools/frontend/input.c tools/frontend/binds.c tools/frontend/menu.c tools/frontend/settings.c tools/frontend/video.c tools/frontend/theme.c tools/frontend/ui_fonts.c
     tools/frontend/http.c tools/frontend/achievements.c tools/frontend/update.c tools/frontend/child.c
     tools/frontend/showcase.c runtime/recomp/recomp_none.c)
@@ -99,18 +108,20 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
   # Setup: imports the player's disc image and builds rondo.exe with zig cc
   find_library(ZLIB_STATIC NAMES libz.a z HINTS "${_cc_prefix}/lib")
   if(ZLIB_STATIC)
-    # Virtual Console releases (tools/setup/vc.c), .7z archives and .chd images (tools/setup/chd.c):
-    # the LZMA SDK's decoder and stb_vorbis, both public domain
+    # Virtual Console releases (tools/setup/vc.c) and .7z archives: the LZMA SDK's 7z decoder
+    # (its LZMA decoder is lzmacore) and stb_vorbis, both public domain
     file(GLOB LZMA_SOURCES third_party/lzma/*.c)
+    list(REMOVE_ITEM LZMA_SOURCES ${CMAKE_SOURCE_DIR}/third_party/lzma/LzmaDec.c)
     add_library(lzmadec STATIC ${LZMA_SOURCES})
     target_compile_definitions(lzmadec PUBLIC Z7_PPMD_SUPPORT Z7_EXTRACT_ONLY)
     target_include_directories(lzmadec PUBLIC third_party/lzma)
+    target_link_libraries(lzmadec PUBLIC lzmacore)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
       target_compile_options(lzmadec PRIVATE -w)
       set_source_files_properties(tools/setup/vorbis.c PROPERTIES COMPILE_OPTIONS "-w")
     endif()
     # updates (tools/setup/install.c): GitHub's releases, downloaded as the game's own requests are
-    set(SETUP_SOURCES tools/setup/main.c tools/setup/zip.c tools/setup/install.c tools/setup/chd.c
+    set(SETUP_SOURCES tools/setup/main.c tools/setup/zip.c tools/setup/install.c tools/setup/chd.c tools/setup/portable.c
       tools/setup/vc.c tools/setup/vc_crypto.c tools/setup/sevenzip.c tools/setup/vorbis.c
       tools/frontend/http.c tools/frontend/update.c tools/frontend/child.c runtime/recomp/recomp_none.c)
     add_executable(rondo_setup ${SETUP_SOURCES})
@@ -160,6 +171,15 @@ add_test(NAME huc6280_sst COMMAND sst_huc6280 ${SST_DIR} -v 0 --known 73,c3,f3)
 add_executable(sound_test tests/sound_test.c runtime/recomp/recomp_none.c)
 target_link_libraries(sound_test PRIVATE pce)
 add_test(NAME sound COMMAND sound_test)
+
+add_executable(cheat_test tests/cheat_test.c tools/frontend/game.c)
+target_include_directories(cheat_test PRIVATE tools/frontend)
+target_link_libraries(cheat_test PRIVATE pce)
+add_test(NAME cheats COMMAND cheat_test)
+
+# needs the disc as a .chd and as a cue sheet: build/chd_test <disc.chd> <disc.cue>
+add_executable(chd_test tests/chd_test.c)
+target_link_libraries(chd_test PRIVATE pce)
 
 # needs the disc: build/state_test <game.cue>
 add_executable(state_test tests/state_test.c runtime/recomp/recomp_none.c)

@@ -11,6 +11,7 @@
 #include "pce/pce.h"
 #include "pce/state.h"
 #include "../frontend/game.h"
+#include "../frontend/moves.h"
 #include "../frontend/prompt.h"
 #include "recomp/recomp.h"
 #include "../recomp/capture_script.h"
@@ -176,6 +177,8 @@ int main(int argc, char **argv)
     bool no_native = false, use_script = false, mute_cd = false;
     Press presses[64];
     int n_press = 0;
+    struct { long from, to, period; int len; uint8_t mask; } every[16];
+    int n_every = 0;
     /* investigation helpers: WRAM watch, pokes, save states, WRAM dumps */
     int n_ram = 0, n_poke = 0, n_dump = 0;
     unsigned ram_addr[32];
@@ -189,6 +192,8 @@ int main(int argc, char **argv)
     const char *bram_file = NULL;        /* --bram FILE: backup RAM to start with (a player's bram.bin), not written */
     GameCheats cheats = {0};
     GameWatch gw;
+    MoveOptions move_opts = {0};   /* --moves eight,limp: moves.h, Attack being the pad's II */
+    static Moves moves;
     bool skip_cine = false;
     long skipped = 0;
     FILE *ram_trace = NULL;   /* --ram-trace FILE: WRAM after every frame */
@@ -260,6 +265,11 @@ int main(int argc, char **argv)
             cheats.play_maria = strstr(c, "play-maria") != NULL;
         }
         else if (!strcmp(argv[i], "--skip-cinematics")) skip_cine = true;
+        else if (!strcmp(argv[i], "--moves") && i + 1 < argc) {
+            const char *c = argv[++i];
+            move_opts.eight_way = strstr(c, "eight") != NULL;
+            move_opts.limp_whip = strstr(c, "limp") != NULL;
+        }
         else if (!strcmp(argv[i], "--ram-trace") && i + 1 < argc) ram_trace = fopen(argv[++i], "wb");
         else if (!strcmp(argv[i], "--write-watch") && i + 1 < argc) {
             char tmp[512];
@@ -310,6 +320,15 @@ int main(int argc, char **argv)
             if (b) *b++ = 0;
             presses[n_press++] = (Press){atol(spec), b ? atoi(b) : 6, parse_buttons(a)};
         }
+        else if (!strcmp(argv[i], "--every") && i + 1 < argc && n_every < 16) {
+            /* --every FROM:TO:PERIOD:BUTTONS[:LEN]: press for LEN frames (default 1) every
+             * PERIOD frames from FROM to TO (PERIOD 1: held) */
+            char btn[64] = "";
+            long a, b, per;
+            int len = 1;
+            if (sscanf(argv[++i], "%ld:%ld:%ld:%63[^:]:%d", &a, &b, &per, btn, &len) >= 4 && per > 0)
+                every[n_every++] = (typeof(every[0])){a, b, per, len, parse_buttons(btn)};
+        }
     }
 
     static Pce pce;
@@ -358,6 +377,7 @@ int main(int argc, char **argv)
         printf("state loaded: frame %ld\n", start_frame);
     }
     game_watch_reset(&gw, &pce);
+    moves_reset(&moves);
     TitlePrompt tp = {.pad = prompt_dev == 1};
     for (int i = 0; i < n_ww; i++) ww_last[i] = pce.wram[ww_addr[i]];
     memcpy(pw_last, pce.vce.pal, sizeof pw_last);
@@ -384,12 +404,18 @@ int main(int argc, char **argv)
         pce.pad = use_script ? capture_pad((int)f) : 0;
         for (int i = 0; i < n_press; i++)
             if (f >= presses[i].frame && f < presses[i].frame + presses[i].len) pce.pad |= presses[i].mask;
+        for (int i = 0; i < n_every; i++)
+            if (f >= every[i].from && f <= every[i].to && (f - every[i].from) % every[i].period < every[i].len)
+                pce.pad |= every[i].mask;
         for (int i = 0; i < n_poke; i++)
             if (f >= poke[i].from && f <= poke[i].to) pce.wram[poke[i].addr] = (uint8_t)poke[i].val;
         if (skip_cine && game_in_cinematic(&pce)) { pce.pad = 0; skipped++; }
+        pce.pad = moves_pad(&moves, &pce, &move_opts, pce.pad, pce.pad & PAD_II);
         if (prompt_dev >= 0) prompt_before_frame(&tp, &pce);
+        moves_before_frame(&moves, &pce, &move_opts, true);
         pce_run_frame(&pce);
         if (prompt_dev >= 0) prompt_after_frame(&tp, &pce);
+        moves_after_frame(&moves, &pce, &move_opts, true);
         game_apply_cheats(&pce, &cheats, &gw);
         {
             bool run = false;

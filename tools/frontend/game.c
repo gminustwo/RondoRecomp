@@ -14,37 +14,48 @@ void game_watch_reset(GameWatch *w, const Pce *p)
 
 static bool menu_state(uint8_t s) { return s <= RONDO_SAVE_MENU || s == 0x08; }
 
+/* Whether the game is counting a value down (game.h, GameTally): it went down more than 12
+ * times in the last second; over once it has been quiet for 3 seconds, or the state changes. */
+static bool tally_running(GameTally *t, bool state_changed, bool dropped, uint64_t frame)
+{
+    if (state_changed) {
+        t->running = false;
+        memset(t->drops, 0, sizeof t->drops);
+    }
+    t->drops[frame % 60] = dropped;
+    t->quiet_frames = dropped ? 0 : t->quiet_frames + 1;
+    int drops = 0;
+    for (int i = 0; i < 60; i++) drops += t->drops[i];
+    if (drops > 12) t->running = true;
+    else if (t->running && t->quiet_frames > 180) t->running = false;
+    return t->running;
+}
+
 void game_apply_cheats(Pce *p, const GameCheats *c, GameWatch *w)
 {
     uint8_t s = game_state(p);
     uint8_t *ram = p->wram;
+    bool state_changed = s != w->last_state;
 
     /* Health: undo any loss while playing (the game's own refills still work, and a new
-     * area or character keeps the maximum the game sets). */
-    if (c->health && s == RONDO_PLAYING && w->last_state == RONDO_PLAYING && ram[RONDO_HEALTH] < w->last_health)
-        ram[RONDO_HEALTH] = w->last_health;
+     * area or character keeps the maximum the game sets), except while the game counts it
+     * down at a stage's end, which would otherwise never finish. */
+    if (c->health) {
+        bool dropped = s == RONDO_PLAYING && w->last_state == RONDO_PLAYING && ram[RONDO_HEALTH] < w->last_health;
+        if (!tally_running(&w->health_tally, state_changed, dropped, p->frame) && dropped)
+            ram[RONDO_HEALTH] = w->last_health;
+    }
 
     /* Lives: undo any loss outside the title and menus. */
     if (c->lives && !menu_state(s) && !menu_state(w->last_state) && ram[RONDO_LIVES] < w->last_lives)
         ram[RONDO_LIVES] = w->last_lives;
 
-    /* Hearts: 99 while playing. If the game counts hearts down steadily (more than 12 times
-     * a second, like a hearts-to-score tally), stop topping them up until it has been quiet
-     * for 3 seconds or the state changes, so the count can finish. */
+    /* Hearts: 99 while playing, except while the game counts them down at a stage's end. */
     if (c->hearts) {
-        if (s != w->last_state) {
-            w->hearts_suspended = false;
-            memset(w->heart_drops, 0, sizeof w->heart_drops);
-        }
-        int slot = (int)(p->frame % 60);
         bool dropped = s == RONDO_PLAYING && ram[RONDO_HEARTS] < w->last_hearts;
-        w->heart_drops[slot] = dropped;
-        w->quiet_frames = dropped ? 0 : w->quiet_frames + 1;
-        int drops = 0;
-        for (int i = 0; i < 60; i++) drops += w->heart_drops[i];
-        if (drops > 12) w->hearts_suspended = true;
-        else if (w->hearts_suspended && w->quiet_frames > 180) w->hearts_suspended = false;
-        if (s == RONDO_PLAYING && !w->hearts_suspended && ram[RONDO_HEARTS] != 0x99) ram[RONDO_HEARTS] = 0x99;
+        if (!tally_running(&w->hearts_tally, state_changed, dropped, p->frame) && s == RONDO_PLAYING &&
+            ram[RONDO_HEARTS] != 0x99)
+            ram[RONDO_HEARTS] = 0x99;
     }
 
     /* Maria: unlocked in the save record while playing (so the game's own player change

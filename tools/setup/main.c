@@ -8,7 +8,7 @@
  *
  *   1. import    read the zip (or a .cue, or a folder with the unzipped image: its .cue files,
  *                subfolders too), find a CUE sheet whose files are all present; or a .chd,
- *                unpacked to a cue sheet and .bin tracks (chd.c); or a Virtual Console
+ *                checked and copied in as it is (chd.c); or a Virtual Console
  *                release, decrypted with the key the player supplies (vc.c)
  *   2. identify  PC Engine CD signature + boot-sector fingerprint (refuses unknown discs
  *                unless --allow-unknown)
@@ -34,6 +34,7 @@
 #include "../frontend/programs.h"
 #include "../recomp/gen.h"
 #include "chd.h"
+#include "portable.h"
 #include "setup.h"
 #include "vc.h"
 #include "zip.h"
@@ -486,20 +487,23 @@ static const char *lang_name(DiscLanguage l)
     return l == DISC_LANG_JA ? "the Japanese original" : "the English patch (fan translation)";
 }
 
-/* The .cue of the disc installed in game/<sub>, if there is one. */
+/* The disc installed in game/<sub>, if there is one: its .cue, or its .chd (a .chd is kept
+ * as it is). */
 static bool installed_cue(const char *game, const char *sub, char *out, size_t n)
 {
     char dir[1100];
     join(dir, sizeof dir, game, sub);
-    int count = 0;
-    char **cues = SDL_GlobDirectory(dir, "*.cue", SDL_GLOB_CASEINSENSITIVE, &count);
     bool ok = false;
-    for (int i = 0; cues && i < count && !ok; i++) {
-        if (strchr(cues[i], '/') || strchr(cues[i], '\\')) continue;     /* this folder only */
-        join(out, n, dir, cues[i]);
-        ok = true;
+    for (int pass = 0; pass < 2 && !ok; pass++) {
+        int count = 0;
+        char **cues = SDL_GlobDirectory(dir, pass ? "*.chd" : "*.cue", SDL_GLOB_CASEINSENSITIVE, &count);
+        for (int i = 0; cues && i < count && !ok; i++) {
+            if (strchr(cues[i], '/') || strchr(cues[i], '\\')) continue;     /* this folder only */
+            join(out, n, dir, cues[i]);
+            ok = true;
+        }
+        SDL_free(cues);
     }
-    SDL_free(cues);
     return ok;
 }
 
@@ -582,7 +586,7 @@ static int fail(const char *step)
 
 int setup_main(int argc, char **argv)
 {
-    const char *input = NULL, *out_arg = NULL, *sdk_arg = NULL, *zig_arg = NULL;
+    const char *input = NULL, *out_arg = NULL, *sdk_arg = NULL, *zig_arg = NULL, *portable_arg = NULL;
     bool allow_unknown = false, do_build = true, rebuild = false, update = false, check = false;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--out") && i + 1 < argc) out_arg = argv[++i];
@@ -594,6 +598,7 @@ int setup_main(int argc, char **argv)
         else if (!strcmp(argv[i], "--rebuild")) rebuild = true;
         else if (!strcmp(argv[i], "--update")) update = true;
         else if (!strcmp(argv[i], "--check")) check = true;
+        else if (!strcmp(argv[i], "--portable") && i + 1 < argc) portable_arg = argv[++i];
         else input = argv[i];
     }
     if (update) {
@@ -602,10 +607,17 @@ int setup_main(int argc, char **argv)
         absolute(dir, sizeof dir);
         return setup_update(dir, check);
     }
+    if (portable_arg && (!strcmp(portable_arg, "on") || !strcmp(portable_arg, "off"))) {
+        /* portable.h: the user folder next to the game, the settings and saves copied over */
+        bool on = !strcmp(portable_arg, "on");
+        say("RondoRecomp Setup " SETUP_VERSION " (portable mode %s)\n", on ? "on" : "off");
+        if (on ? portable_enable(true) : portable_disable()) return 0;
+        return fail(on ? "turning portable mode on" : "turning portable mode off");
+    }
     if (!input && !rebuild) {
         fprintf(stderr, "usage: rondo_setup <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad | WUP folder> [--keys FILE]\n"
                         "                   [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]\n       rondo_setup --rebuild [--out DIR] [--sdk DIR] [--zig ZIG]\n"
-                        "       rondo_setup --update [--check] [--out DIR]\n");
+                        "       rondo_setup --update [--check] [--out DIR]\n       rondo_setup --portable on|off\n");
         return 2;
     }
     /* the game is built in home; sdk/ and zig/ are next to Setup (programs.h: both are this
@@ -667,11 +679,11 @@ int setup_main(int argc, char **argv)
             if (!import_cue(input, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
             kind = discid_identify(cue, &fp);
         } else if (ends_with(input, ".chd")) {
-            /* checked before it is unpacked */
+            /* identified before the rest of it is checked */
             kind = chd_identify(input, &fp);
             if (kind == DISC_INVALID) return fail("importing");
             if (kind == DISC_RONDO || allow_unknown) {
-                if (!chd_import(input, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
+                if (!chd_install(input, stage, cue, sizeof cue)) { remove_tree(stage); return fail("importing"); }
                 kind = discid_identify(cue, &fp);
             }
         } else if (SDL_GetPathInfo(input, &info) && info.type == SDL_PATHTYPE_DIRECTORY) {
@@ -702,7 +714,7 @@ int setup_main(int argc, char **argv)
             SDL_free(files);
             if (!n_cues) { snprintf(g_err, sizeof g_err, "no .cue or .chd file in %s", input); return fail("importing"); }
             if (found[0]) {
-                if (!(found_chd ? chd_import(found, stage, cue, sizeof cue) : import_cue(found, stage, cue, sizeof cue))) {
+                if (!(found_chd ? chd_install(found, stage, cue, sizeof cue) : import_cue(found, stage, cue, sizeof cue))) {
                     remove_tree(stage);
                     return fail("importing");
                 }

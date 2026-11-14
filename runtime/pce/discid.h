@@ -9,11 +9,12 @@ typedef enum {
     DISC_RONDO,         /* recognised Rondo of Blood */
 } DiscKind;
 
-/* Checks the PC Engine CD signature, then fingerprints the boot program sector.
+/* Checks the PC Engine CD signature, then fingerprints the boot program sector (a .cue or a
+ * .chd, disc.h).
  * If fingerprint is non-NULL it receives the fingerprint (0 when unreadable). */
 DiscKind discid_identify(const char *cue_path, uint64_t *fingerprint);
 /* The same check from the first data track's sectors 1 and 2 (2048 bytes each), for a disc
- * image read some other way (Setup's .chd reader). */
+ * image read some other way. */
 DiscKind discid_identify_sectors(const uint8_t *sector1, const uint8_t *sector2, uint64_t *fingerprint);
 
 typedef enum {

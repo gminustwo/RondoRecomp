@@ -6,8 +6,37 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "pce/disc.h"
+#include "programs.h"
 
-/* ---- remembered path ------------------------------------------------------- */
+static void join(char *out, size_t n, const char *dir, const char *name)
+{
+    size_t l = strlen(dir);
+    bool sep = l && (dir[l - 1] == '/' || dir[l - 1] == '\\');
+    snprintf(out, n, "%s%s%s", dir, sep ? "" : "/", name);
+}
+
+/* the folder holding `dir` (a file, or a folder with or without a separator at the end),
+ * ending in a separator */
+static void parent(char *dir)
+{
+    size_t l = strlen(dir);
+    while (l && (dir[l - 1] == '/' || dir[l - 1] == '\\')) dir[--l] = 0;
+    while (l && dir[l - 1] != '/' && dir[l - 1] != '\\') dir[--l] = 0;
+}
+
+/* ---- profile and remembered path ------------------------------------------- */
+
+/* Portable mode: a folder named user next to the game (programs.h) */
+static bool portable_dir(char *out, size_t n)
+{
+    char user[1024];
+    rondo_user_dir(user, sizeof user);
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(user, &info) || info.type != SDL_PATHTYPE_DIRECTORY) return false;
+    snprintf(out, n, "%s/", user);
+    return true;
+}
 
 bool locate_profile_dir(char *out, size_t n)
 {
@@ -19,6 +48,7 @@ bool locate_profile_dir(char *out, size_t n)
         SDL_CreateDirectory(out);
         return true;
     }
+    if (portable_dir(out, n)) return true;
     char *dir = SDL_GetPrefPath("RondoRecomp", "RondoRecomp");
     if (!dir) return false;
     snprintf(out, n, "%s", dir);
@@ -66,25 +96,12 @@ typedef struct {
     int depth;
 } Search;
 
-static void join(char *out, size_t n, const char *dir, const char *name)
-{
-    size_t l = strlen(dir);
-    bool sep = l && (dir[l - 1] == '/' || dir[l - 1] == '\\');
-    snprintf(out, n, "%s%s%s", dir, sep ? "" : "/", name);
-}
-
-static bool has_cue_ext(const char *name)
-{
-    size_t l = strlen(name);
-    return l > 4 && SDL_strcasecmp(name + l - 4, ".cue") == 0;
-}
-
 static SDL_EnumerationResult SDLCALL visit(void *userdata, const char *dirname, const char *fname)
 {
     Search *s = userdata;
     char path[1024];
     join(path, sizeof path, dirname, fname);
-    if (has_cue_ext(fname)) {
+    if (disc_is_image(fname)) {
         if (discid_identify(path, NULL) == DISC_RONDO) {
             snprintf(s->out, s->out_len, "%s", path);
             s->found = true;
@@ -104,13 +121,6 @@ static SDL_EnumerationResult SDLCALL visit(void *userdata, const char *dirname, 
     return SDL_ENUM_CONTINUE;
 }
 
-static void parent(char *dir)
-{
-    size_t l = strlen(dir);
-    while (l && (dir[l - 1] == '/' || dir[l - 1] == '\\')) dir[--l] = 0;
-    while (l && dir[l - 1] != '/' && dir[l - 1] != '\\') dir[--l] = 0;
-}
-
 typedef struct {
     char *out;
     size_t out_len;
@@ -122,7 +132,7 @@ static SDL_EnumerationResult SDLCALL visit_lang(void *userdata, const char *dirn
     LangSearch *s = userdata;
     char path[1024];
     join(path, sizeof path, dirname, fname);
-    if (!has_cue_ext(fname) || discid_identify(path, NULL) != DISC_RONDO ||
+    if (!disc_is_image(fname) || discid_identify(path, NULL) != DISC_RONDO ||
         (discid_language(path) == DISC_LANG_JA) != s->japanese)
         return SDL_ENUM_CONTINUE;
     snprintf(s->out, s->out_len, "%s", path);

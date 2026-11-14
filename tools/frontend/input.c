@@ -281,6 +281,8 @@ uint8_t input_game(Input *in)
 
 bool input_run_held(const Input *in) { return input_held(in, ACT_RUN); }
 
+bool input_attack_held(const Input *in) { return input_held(in, ACT_ATTACK); }
+
 bool input_rewind_held(const Input *in) { return input_held(in, ACT_REWIND); }
 
 Nav input_nav_event(const SDL_Event *ev)

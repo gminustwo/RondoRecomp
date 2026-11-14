@@ -1,10 +1,44 @@
-/* CUE sheet parsing and sector reads. See disc.h. */
+/* CUE sheet parsing, .chd tracks and sector reads. See disc.h. */
 #include "disc.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "chd.h"
+
+_Static_assert(sizeof(DiscTrack) == (sizeof(long) == 8 ? 1064 : 1056) && sizeof(void *) <= 8,
+               "DiscTrack's size is part of the save state format (disc.h)");
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+FILE *disc_fopen(const char *path, const char *mode)
+{
+#ifdef _WIN32
+    wchar_t wpath[1024], wmode[8];
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wpath, 1024) &&
+        MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 8)) {
+        FILE *f = _wfopen(wpath, wmode);
+        if (f) return f;
+    }
+#endif
+    return fopen(path, mode);
+}
+
+static bool ends_with_ci(const char *name, const char *ext)
+{
+    size_t l = strlen(name), e = strlen(ext);
+    if (l < e) return false;
+    for (size_t i = 0; i < e; i++)
+        if (tolower((unsigned char)name[l - e + i]) != ext[i]) return false;
+    return true;
+}
+
+bool disc_is_image(const char *name) { return ends_with_ci(name, ".cue") || ends_with_ci(name, ".chd"); }
 
 static int msf_frames(const char *s)
 {
@@ -15,7 +49,7 @@ static int msf_frames(const char *s)
 
 static long file_size(const char *path)
 {
-    FILE *f = fopen(path, "rb");
+    FILE *f = disc_fopen(path, "rb");
     if (!f) return -1;
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
@@ -26,7 +60,7 @@ static long file_size(const char *path)
 /* Returns offset of the PCM data chunk, or -1. */
 static long wav_data(const char *path, long *size)
 {
-    FILE *f = fopen(path, "rb");
+    FILE *f = disc_fopen(path, "rb");
     if (!f) return -1;
     uint8_t h[12];
     if (fread(h, 1, 12, f) != 12 || memcmp(h, "RIFF", 4) || memcmp(h + 8, "WAVE", 4)) { fclose(f); return -1; }
@@ -62,10 +96,57 @@ static int token(const char **p, char *out, int max)
     return n;
 }
 
+/* The tracks of a .chd, where chdman extractcd would put them (Setup up to 1.1 unpacked a
+ * .chd so): a file per track, its pregap a PREGAP line if the .chd does not store it and
+ * INDEX 00 if it does, its postgap (never stored) zeros at the end of the file. */
+static Chd *track_chd(const DiscTrack *t)
+{
+    return (Chd *)(uintptr_t)((uint64_t)t->chd[1] << 32 | t->chd[0]);
+}
+
+static bool open_chd(Disc *disc, const char *path, char *err, int err_len)
+{
+    Chd *c = chd_open(path, err, err_len);
+    if (!c) return false;
+    int cursor = 0;
+    for (int i = 0; i < chd_track_count(c) && disc->n_tracks < DISC_MAX_TRACKS; i++) {
+        const ChdTrack *ct = chd_track(c, i);
+        DiscTrack *t = &disc->tracks[disc->n_tracks++];
+        t->number = ct->number;
+        t->data = !ct->audio;
+        snprintf(t->path, sizeof t->path, "%s", path);
+        t->sector_size = ct->size;
+        t->user_offset = t->data && ct->size == 2352 ? 16 : 0;
+        if (!ct->pregap_stored) cursor += ct->pregap;
+        t->file_index = ct->pregap_stored ? ct->pregap : 0;
+        t->lba = cursor + t->file_index;
+        t->sectors = ct->frames + ct->postgap - t->file_index;
+        t->chd_first = (int)ct->first;
+        t->chd_frames = ct->frames;
+        t->chd[0] = (uint32_t)(uintptr_t)c;
+        t->chd[1] = (uint32_t)((uint64_t)(uintptr_t)c >> 32);
+        cursor += ct->frames + ct->postgap;
+    }
+    if (!disc->n_tracks) {
+        snprintf(err, (size_t)err_len, "no tracks in %s", path);
+        chd_close(c);
+        return false;
+    }
+    return true;
+}
+
+void disc_close(Disc *disc)
+{
+    if (!disc->n_tracks) return;
+    chd_close(track_chd(&disc->tracks[0]));
+    for (int i = 0; i < disc->n_tracks; i++) disc->tracks[i].chd[0] = disc->tracks[i].chd[1] = 0;
+}
+
 bool disc_open(Disc *disc, const char *cue_path, char *err, int err_len)
 {
     memset(disc, 0, sizeof *disc);
-    FILE *f = fopen(cue_path, "r");
+    if (ends_with_ci(cue_path, ".chd")) return open_chd(disc, cue_path, err, err_len);
+    FILE *f = disc_fopen(cue_path, "r");
     if (!f) { snprintf(err, (size_t)err_len, "cannot open %s", cue_path); return false; }
 
     char base[1024];
@@ -166,9 +247,27 @@ const DiscTrack *disc_track_at(const Disc *disc, int lba)
     return NULL;
 }
 
+/* a .chd keeps audio as big-endian samples: swapped */
+static bool read_chd(const DiscTrack *t, int lba, int count, int bytes, int skip, uint8_t *out)
+{
+    Chd *c = track_chd(t);
+    for (int i = 0; i < count; i++) {
+        uint8_t *o = out + (size_t)i * (size_t)bytes;
+        int k = t->file_index + lba - t->lba + i;
+        if (k >= t->chd_frames) { memset(o, 0, (size_t)bytes); continue; }   /* the postgap */
+        const uint8_t *s = chd_frame(c, (uint64_t)t->chd_first + (uint64_t)k);
+        if (!s) return false;
+        s += skip;
+        if (t->data) memcpy(o, s, (size_t)bytes);
+        else for (int j = 0; j < bytes; j += 2) { o[j] = s[j + 1]; o[j + 1] = s[j]; }
+    }
+    return true;
+}
+
 static bool read_sectors(const DiscTrack *t, int lba, int count, int bytes, int skip, uint8_t *out)
 {
-    FILE *f = fopen(t->path, "rb");
+    if (t->chd[0] | t->chd[1]) return read_chd(t, lba, count, bytes, skip, out);
+    FILE *f = disc_fopen(t->path, "rb");
     if (!f) return false;
     bool ok = true;
     for (int i = 0; i < count && ok; i++) {

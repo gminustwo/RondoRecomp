@@ -182,6 +182,8 @@ bool pce_init(Pce *p, const char *cue, char *err, int err_len)
     return true;
 }
 
+void pce_close(Pce *p) { disc_close(&p->disc); }
+
 bool pce_map_real_bios(Pce *p, const char *path, char *err, int err_len)
 {
     FILE *f = fopen(path, "rb");

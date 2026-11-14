@@ -64,6 +64,8 @@ void settings_load(Settings *s, const char *path)
         else if (!strcmp(key, "language")) s->language = clampi(n, 0, LANG_COUNT - 1);
         else if (!strcmp(key, "disc_ja")) snprintf(s->disc_ja, sizeof s->disc_ja, "%s", val);
         else if (!strcmp(key, "start_screen")) s->start_screen = n != 0;
+        else if (!strcmp(key, "eight_way")) s->eight_way = n != 0;
+        else if (!strcmp(key, "limp_whip")) s->limp_whip = n != 0;
         else if (!strcmp(key, "disc_en")) snprintf(s->disc_en, sizeof s->disc_en, "%s", val);
         else if (!strcmp(key, "retroachievements")) s->ra_enabled = n != 0;
         else if (!strcmp(key, "ra_hardcore")) s->ra_hardcore = n != 0;
@@ -91,11 +93,13 @@ bool settings_save(const Settings *s, const char *path)
             "fullscreen = %d\nvsync = %d\naspect = %d\nscaling = %d\nfilter = %d\nscreen_effect = %d\n"
             "effect_strength = %d\nsides = %d\n"
             "skip_cinematics = %d\nrewind = %d\nvolume = %d\nslot = %d\nstart_screen = %d\n"
+            "eight_way = %d\nlimp_whip = %d\n"
             "cheat_health = %d\ncheat_hearts = %d\ncheat_lives = %d\n"
             "maria_unlocked = %d\nplay_maria = %d\n"
             "language = %d\ndisc_ja = %s\ndisc_en = %s\n",
             s->fullscreen, s->vsync, s->aspect, s->scaling, s->filter, s->effect, s->effect_strength, s->sides,
             s->skip, s->rewind, s->volume, s->slot, s->start_screen,
+            s->eight_way, s->limp_whip,
             s->cheat_health, s->cheat_hearts, s->cheat_lives,
             s->maria_unlocked, s->play_maria,
             s->language, s->disc_ja, s->disc_en);

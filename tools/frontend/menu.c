@@ -92,6 +92,8 @@ static const Item GAMEPLAY_ITEMS[] = {
     TOGGLE("Rewind", rewind, MENU_SETTINGS_CHANGED),
     CHOICE("Volume", volume, VOLUMES, 0, MENU_SETTINGS_CHANGED),
     TOGGLE("Start screen at launch", start_screen, MENU_SETTINGS_CHANGED),
+    TOGGLE("8-way whip and doves", eight_way, MENU_SETTINGS_CHANGED),
+    TOGGLE("Limp whip", limp_whip, MENU_SETTINGS_CHANGED),
     {IT_BACK, "Back", 0, 0, NULL, 0, 0, 0},
 };
 static const Item CHEAT_ITEMS[] = {
@@ -169,7 +171,7 @@ static const struct { const char *label, *help; } HELP[] = {
     {"Load state", "Continue from the save state in the slot below."},
     {"State slot", "Which of the nine save-state slots to use (F6 / F7 in the game)."},
     {"Video", "Fullscreen, the picture's shape, size, filter and screen effect."},
-    {"Gameplay", "Story scenes, rewind, volume and the start screen."},
+    {"Gameplay", "Story scenes, rewind, volume, the start screen and Super Castlevania IV moves."},
     {"Cheats", "Infinite health, hearts and lives; Maria."},
     {"Controls", "The buttons and keys: change any of them."},
     {"Setup (add a disc, rebuild)", "Open Setup to add the other language's disc or rebuild; this closes."},
@@ -191,6 +193,8 @@ static const struct { const char *label, *help; } HELP[] = {
     {"Reset controls", "Every button and key back to its default."},
     {"Volume", "Sound volume."},
     {"Start screen at launch", "Off: " GAME_PROGRAM " goes straight into the game."},
+    {"8-way whip and doves", "Attack with a direction held aims the whip (or Maria's doves); Sub-weapon throws."},
+    {"Limp whip", "Keep Attack held after a whip: it hangs from Richter's hand and the d-pad swings it."},
     {"Infinite health", "Health never goes down."},
     {"Infinite hearts", "Hearts stay at 99."},
     {"Infinite lives", "Lives never run out."},

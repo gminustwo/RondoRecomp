@@ -26,7 +26,7 @@ This is the same model as LASRecomp: tools are shipped, the game-specific code i
 
 ## Setup pipeline
 
-1. **Import**: read the zip (CUE with BIN, IMG, ISO and/or WAV tracks), or unpack a `.chd`. Nothing is written until the disc checks out.
+1. **Import**: read the zip (CUE with BIN, IMG, ISO and/or WAV tracks), or check a `.chd` (kept as it is). Nothing is written until the disc checks out.
 2. **Identify**: PC Engine CD signature on the first data track, then a fingerprint of the boot
    program sector to recognise the release (unknown releases are refused or need explicit confirmation).
    The original Japanese disc and the English translation share the boot sector; the language
@@ -86,7 +86,8 @@ What Setup does (about 40 s; the first build also prepares Zig's C library):
 4. build: `zig cc` compiles the runtime + generated C into `rondo.exe` (GUI subsystem), copies DLLs
 
 `rondo.exe` uses `game/en/` and `game/ja/` next to itself (the menu's Language switches), keeps
-saves in `%APPDATA%\RondoRecomp` (`-ja` files for Japanese), records code it
+saves in `%APPDATA%\RondoRecomp` (`-ja` files for Japanese; in a `user` folder next to
+itself if there is one: portable mode, which Setup's Portable checkbox turns on and off), records code it
 had to interpret in `misses.txt`, and writes `rondo.log` (share of CPU cycles run natively).
 `Rebuild` / `--rebuild` recompiles with those misses.
 
@@ -165,29 +166,44 @@ On Windows the game also links `winhttp`.
 
 ## CHD
 
-Setup reads a `.chd` (MAME's compressed hunks of data, as `chdman createcd` makes it) in
-`tools/setup/chd.c`, on its own or in the folder chosen with "Disc folder..." (after the
-`.cue` files there). It handles CHD version 5 with chdman's CD codecs: `cdlz` (LZMA, the LZMA
-SDK's decoder), `cdzl` (Deflate, zlib) and `cdfl` (FLAC: a small decoder of its own for the
-16-bit stereo frames chdman writes). Plain `lzma` / `zlib` hunks and uncompressed ones work
-too. It refuses, saying why, an older version (chdman copy updates it), another codec (such
-as `cdzs`, zstd) and a `.chd` that needs a parent.
+A `.chd` (MAME's compressed hunks of data, as `chdman createcd` makes it) is kept as it is:
+the game reads it in place (`runtime/pce/chd.c`, under `disc.c`, which takes a `.chd` wherever
+it takes a `.cue`). Setup takes one on its own or in the folder chosen with "Disc folder..."
+(after the `.cue` files there), checks it and copies it into `game/en` or `game/ja`; nothing
+is unpacked. The Japanese disc takes 270 MB that way, against 496 MB as a cue sheet and `.bin`
+tracks. Setup up to 1.1 unpacked a `.chd` to a cue sheet and tracks; those installs keep
+working, and running Setup again with the `.chd` replaces them with it.
 
-The first data track's sectors 1 and 2 are read straight from the `.chd`
-(`discid_identify_sectors`), so a disc that isn't Rondo of Blood is turned down before
-anything is unpacked. The disc is then written to `game.tmp` as chdman extractcd would: a
-cue sheet and a `.bin` per track, named after the `.chd` like a Redump set (`<name> (Track
-02).bin`), with audio turned back to little-endian. Each track's pregap is `INDEX 00` when the
-`.chd` stores it (`PGTYPE:V...`) and a `PREGAP` line otherwise. Sectors whose sync header
-and ECC `cdlz` / `cdzl` left out have them rebuilt. Every hunk is checked against the CRC-16
-in the map, so a damaged `.chd` fails at the hunk.
+The reader handles CHD version 5 with chdman's CD codecs: `cdlz` (LZMA, the LZMA SDK's
+decoder, `third_party/lzma/LzmaDec.c`, in the SDK as `src/lzma`), `cdzl` (Deflate: a small
+decoder of its own, so the game needs no zlib) and `cdfl` (FLAC: a small decoder of its own
+for the 16-bit stereo frames chdman writes). Plain `lzma` / `zlib` hunks and uncompressed ones
+work too. It refuses, saying why, an older version (chdman copy updates it), another codec
+(such as `cdzs`, zstd) and a `.chd` that needs a parent. Sectors whose sync header and ECC
+`cdlz` / `cdzl` left out have them rebuilt, and every hunk is checked against the CRC-16 in
+the map as it is read. The last 4 hunks read stay decoded (a hunk is 8 sectors), so CD audio
+decodes a hunk about 9 times a second; reading runs at about 65,000 sectors a second, and the
+game's largest load (352 sectors) takes about 5 ms.
+
+The tracks sit where chdman extractcd would put them, a file per track: a pregap the `.chd`
+stores (`PGTYPE:V...`) is `INDEX 00` and one it does not is a `PREGAP` gap, a postgap (never
+stored) reads as zeros at the end of its track, and audio comes back as little-endian samples.
+
+Setup reads the first data track's sectors 1 and 2 first (`discid_identify`), so a disc that
+isn't Rondo of Blood is turned down at once; then every hunk is checked before the copy, so a
+damaged `.chd` fails in Setup at the hunk ("hunk 14361 of 27663 does not check out") rather
+than in the game.
 
 Tested with the Redump-sourced Japanese disc (`Akumajou Dracula X - Chi no Rondo (Japan)
-(FABT, FACT).chd`, 22 tracks, `cdlz,cdzl,cdfl`): about 7 s to unpack. All 20 audio tracks match a
-trurip dump of the disc to the byte, and so does every data sector from `INDEX 01` on, except
-how the first 75 pregap sectors and the last sector of each data track are framed (zeros in
-the Redump image, empty Mode 1 sectors in trurip's), which the game never reads. The capture
-run found the same 4312 entry points as with the other images, and `--autotest` passes.
+(FABT, FACT).chd`, 22 tracks, `cdlz,cdzl,cdfl`): `build/chd_test <disc.chd> <disc.cue>` reads
+all 220,662 sectors the same as the cue sheet and tracks Setup 1.1 unpacked it to (Windows and
+Linux), with the same fingerprint, language and RetroAchievements hash. Setup's check and copy
+take about 3 s. The capture run finds the same 4312 entry points and the recompiled C is the
+same to the byte; `--autotest` and `--autotest-features` (into Stage 1) pass. Setup 1.1's
+unpacked tracks matched a trurip dump of the disc to the byte in all 20 audio tracks and in
+every data sector from `INDEX 01` on, except how the first 75 pregap sectors and the last
+sector of each data track are framed (zeros in the Redump image, empty Mode 1 sectors in
+trurip's), which the game never reads.
 
 ## Virtual Console
 

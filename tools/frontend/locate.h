@@ -19,7 +19,9 @@ bool locate_installed(bool japanese, char *out, size_t out_len);
 void locate_remember(const char *cue_path);
 
 /* The player's profile folder (settings.ini, saves, states, the remembered disc), ending in a
- * separator: %APPDATA%\RondoRecomp\RondoRecomp, or the folder in the RONDORECOMP_PROFILE
- * environment variable (a separate profile, e.g. to try the game as a new player; Setup and
- * rondo.exe started from each other inherit it). */
+ * separator: the folder in the RONDORECOMP_PROFILE environment variable (a separate profile,
+ * e.g. to try the game as a new player; Setup and rondo.exe started from each other inherit
+ * it), else a folder named user next to the game if there is one (portable mode; on Linux's
+ * AppImage, next to the AppImage), else %APPDATA%\RondoRecomp\RondoRecomp
+ * (~/.local/share/RondoRecomp/RondoRecomp on Linux). */
 bool locate_profile_dir(char *out, size_t n);
