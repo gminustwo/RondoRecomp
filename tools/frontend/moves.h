@@ -23,6 +23,7 @@
 typedef struct MoveOptions {
     bool eight_way;            /* Richter's whip and Maria's doves in 8 directions */
     bool limp_whip;            /* Richter's whip hangs while Attack is held */
+    bool stair_catch;          /* a jump comes down onto stairs without Up held (moves_pad) */
 } MoveOptions;
 
 #define MOVES_WIN_W 208        /* the picture around Richter the whip is redrawn in */

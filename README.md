@@ -37,9 +37,13 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Rewinding up to 30 min that works like the Konami Castlevania collections
 - Compatible with the original PC Engine version, English patched, Wii, and Wii U versions
 - Full suite of video options including filters and screen effects
+- 16:9 widescreen (off by default), with the picture moving over at level ends instead of showing black, and the file select menus wide too
+- Title art (with widescreen): the title screen and the stage map widened with built-in side art (palette entries and tile layout only, none of the game's picture); your own `title_sides.png` / `map_sides.png` in the profile folder replaces it
+- Smooth fades and smooth dithering (off by default): fades blended in 24-bit colour, and the game's checkerboard dithering drawn as the colour it stands for
 - Save stating
 - Cheats
 - Super Castlevania IV moves (Gameplay page): 8-way whipping and dove throwing, and a limp whip, after Pizzano's Super Rondo of Blood hack (RondoRecomp's own version)
+- **Sticky stairs** (Gameplay page, off by default): jumps land on stairs without holding Up
 - RetroAchievements
 - Portable mode: tick Portable in Setup (or make a `user` folder next to `rondo.exe` or the AppImage) and options, saves and states are kept there
 - 4:3 screens (arcade cabinets): Setup's window always fits the screen and has a 4:3 layout (picked on a 4:3 screen, or with its "4:3 screen" checkbox or `--4:3`); the game's start screen and menus are laid out for 4:3 too
@@ -69,7 +73,10 @@ Findings so far: [docs/findings.md](docs/findings.md).
 - A gothic start screen (a candlelit town at night under a pale moon) and menus in arched
   gold-and-umber frames with blackletter titles, with controller, keyboard and mouse.
 - An in-game menu (F1 / Back): video modes for 4K, 16:9 and ultrawide screens (4:3 with
-  blurred sides, square pixels, stretch, integer scaling, sharp filtering), cinematic
+  blurred sides, square pixels, stretch, integer scaling, sharp filtering), a 16:9 widescreen
+  option (off by default) that shows more of the level on each side (with the picture moving
+  over at level ends and the file select menus wide too), smooth fades and smooth dithering,
+  cinematic
   skipping, cheats (infinite health, hearts, lives), modern controller layout with
   sub-weapon / Item Crash / backflip buttons, rebindable controls (keys of your own to move, such
   as WASD, alongside the arrows), and a Japanese option (with your Japanese disc).

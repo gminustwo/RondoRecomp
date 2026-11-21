@@ -23,7 +23,8 @@ static void clear_host_fields(Pce *q)
     memset(q->cpu.page_ptr, 0, sizeof q->cpu.page_ptr);
     memset(q->cpu.page_ram, 0, sizeof q->cpu.page_ram);
     memset(q->vdc.fb, 0, sizeof q->vdc.fb);
-    memset(q->vdc.reserved, 0, sizeof q->vdc.reserved);
+    q->vdc.wide = q->vdc.fb_wide = 0;
+    q->vdc.wide_x0 = q->vdc.wide_x1 = 0;
     q->vdc.fb_w = 256;
     q->snd.ram = NULL;
     q->snd.disc = NULL;
@@ -65,7 +66,10 @@ void pce_state_restore(Pce *p, const uint8_t *in)
     memcpy(p->cpu.page_ptr, keep.cpu.page_ptr, sizeof p->cpu.page_ptr);
     memcpy(p->cpu.page_ram, keep.cpu.page_ram, sizeof p->cpu.page_ram);
     memcpy(p->vdc.fb, keep.vdc.fb, sizeof p->vdc.fb);
-    memset(p->vdc.reserved, 0, sizeof p->vdc.reserved);
+    p->vdc.wide = keep.vdc.wide;
+    p->vdc.fb_wide = keep.vdc.fb_wide;
+    p->vdc.wide_x0 = keep.vdc.wide_x0;
+    p->vdc.wide_x1 = keep.vdc.wide_x1;
     p->vdc.fb_w = keep.vdc.fb_w;
     p->snd.ram = keep.snd.ram;
     p->snd.disc = &p->disc;

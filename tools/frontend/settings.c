@@ -24,6 +24,10 @@ void settings_default(Settings *s)
     s->language = LANG_EN;
     s->ra_enabled = true;
     s->check_updates = true;
+    s->wide_edges = true;
+    s->wide_menus = true;
+    s->room_sides = true;
+    s->title_art = true;
     bind_defaults(s->bind_pad, s->bind_key);
 }
 
@@ -47,12 +51,22 @@ void settings_load(Settings *s, const char *path)
         int n = atoi(val);
         if (!strcmp(key, "fullscreen")) s->fullscreen = n != 0;
         else if (!strcmp(key, "vsync")) s->vsync = n != 0;
+        /* a key of its own: 0.x's "widescreen" / "experimental_widescreen" (up to 21:9) are
+         * not read, so turning 16:9 on is always the player's choice */
+        else if (!strcmp(key, "widescreen_16_9")) s->widescreen = n != 0;
+        else if (!strcmp(key, "widescreen_edges")) s->wide_edges = n != 0;
+        else if (!strcmp(key, "widescreen_menus")) s->wide_menus = n != 0;
+        else if (!strcmp(key, "widescreen_room_sides")) s->room_sides = n != 0;
+        else if (!strcmp(key, "widescreen_near_spawns")) s->near_spawns = n != 0;
+        else if (!strcmp(key, "widescreen_title_art")) s->title_art = n != 0;
         else if (!strcmp(key, "aspect")) s->aspect = clampi(n, 0, ASPECT_COUNT - 1);
         else if (!strcmp(key, "scaling")) s->scaling = clampi(n, 0, SCALE_COUNT - 1);
         else if (!strcmp(key, "filter")) s->filter = clampi(n, 0, FILTER_COUNT - 1);
         else if (!strcmp(key, "screen_effect")) s->effect = clampi(n, 0, EFFECT_COUNT - 1);
         else if (!strcmp(key, "effect_strength")) s->effect_strength = clampi(n, 0, STRENGTH_COUNT - 1);
         else if (!strcmp(key, "sides")) s->sides = clampi(n, 0, SIDES_COUNT - 1);
+        else if (!strcmp(key, "smooth_fades")) s->smooth_fades = n != 0;
+        else if (!strcmp(key, "smooth_dithering")) s->smooth_dither = n != 0;
         else if (!strcmp(key, "skip_cinematics")) s->skip = clampi(n, 0, SKIP_COUNT - 1);
         else if (!strcmp(key, "rewind")) s->rewind = n != 0;
         else if (!strcmp(key, "volume")) s->volume = clampi(n, 0, 10);
@@ -67,6 +81,7 @@ void settings_load(Settings *s, const char *path)
         else if (!strcmp(key, "start_screen")) s->start_screen = n != 0;
         else if (!strcmp(key, "eight_way")) s->eight_way = n != 0;
         else if (!strcmp(key, "limp_whip")) s->limp_whip = n != 0;
+        else if (!strcmp(key, "sticky_stairs")) s->sticky_stairs = n != 0;
         else if (!strcmp(key, "run")) s->run = n != 0;
         else if (!strcmp(key, "disc_en")) snprintf(s->disc_en, sizeof s->disc_en, "%s", val);
         else if (!strcmp(key, "retroachievements")) s->ra_enabled = n != 0;
@@ -92,16 +107,16 @@ bool settings_save(const Settings *s, const char *path)
     if (!f) return false;
     fprintf(f,
             "# Rondo Recomp options (also changed from the in-game menu: F1 / Back)\n"
-            "fullscreen = %d\nvsync = %d\naspect = %d\nscaling = %d\nfilter = %d\nscreen_effect = %d\n"
-            "effect_strength = %d\nsides = %d\n"
+            "fullscreen = %d\nvsync = %d\nwidescreen_16_9 = %d\nwidescreen_edges = %d\nwidescreen_menus = %d\nwidescreen_room_sides = %d\nwidescreen_near_spawns = %d\nwidescreen_title_art = %d\naspect = %d\nscaling = %d\nfilter = %d\n"
+            "screen_effect = %d\neffect_strength = %d\nsides = %d\nsmooth_fades = %d\nsmooth_dithering = %d\n"
             "skip_cinematics = %d\nrewind = %d\nvolume = %d\nslot = %d\nstart_screen = %d\n"
-            "eight_way = %d\nlimp_whip = %d\nrun = %d\n"
+            "eight_way = %d\nlimp_whip = %d\nsticky_stairs = %d\nrun = %d\n"
             "cheat_health = %d\ncheat_hearts = %d\ncheat_lives = %d\n"
             "maria_unlocked = %d\nplay_maria = %d\n"
             "language = %d\ndisc_ja = %s\ndisc_en = %s\n",
-            s->fullscreen, s->vsync, s->aspect, s->scaling, s->filter, s->effect, s->effect_strength, s->sides,
+            s->fullscreen, s->vsync, s->widescreen, s->wide_edges, s->wide_menus, s->room_sides, s->near_spawns, s->title_art, s->aspect, s->scaling, s->filter, s->effect, s->effect_strength, s->sides, s->smooth_fades, s->smooth_dither,
             s->skip, s->rewind, s->volume, s->slot, s->start_screen,
-            s->eight_way, s->limp_whip, s->run,
+            s->eight_way, s->limp_whip, s->sticky_stairs, s->run,
             s->cheat_health, s->cheat_hearts, s->cheat_lives,
             s->maria_unlocked, s->play_maria,
             s->language, s->disc_ja, s->disc_en);

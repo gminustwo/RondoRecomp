@@ -31,13 +31,20 @@ void video_free(Video *v)
     SDL_zerop(v);
 }
 
-void video_upload(Video *v, const uint32_t *fb, int w, int h, int pitch)
+void video_upload(Video *v, const uint32_t *fb, int w, int h, int pitch, int wide)
 {
     if (w <= 0 || h <= 0) return;
     SDL_Rect r = {0, 0, w, h};
     SDL_UpdateTexture(v->frame, &r, fb, pitch * 4);
     v->src_w = w;
     v->src_h = h;
+    v->src_wide = wide;
+    v->src_wide_full = wide;   /* (main.c sets it to the grown-out width while growing) */
+}
+
+double video_picture_aspect(const Video *v, const Settings *s)
+{
+    return s->aspect == ASPECT_SQUARE ? 256.0 / (double)v->src_h : 4.0 / 3.0;
 }
 
 /* Where the picture goes in a ww x wh window. */
@@ -45,8 +52,19 @@ static SDL_FRect place(const Video *v, const Settings *s, int ww, int wh)
 {
     float sw = (float)v->src_w, sh = (float)v->src_h;
     if (s->aspect == ASPECT_STRETCH) return (SDL_FRect){0, 0, (float)ww, (float)wh};
-    /* aspect of the picture: a TV's 4:3, or square pixels */
-    float ar = s->aspect == ASPECT_SQUARE ? sw / sh : 4.0f / 3.0f;
+    /* aspect of the whole picture: a TV's 4:3 (for the 256 pixels the game normally
+     * shows; widescreen adds to the width at the same pixel shape), or square pixels */
+    float base = sw - 2.0f * (float)v->src_wide;
+    float ar = s->aspect == ASPECT_SQUARE ? sw / sh : 4.0f / 3.0f * sw / base;
+    /* Widescreen draws whole pixels a side (an even number), so it falls a little short of
+     * the screen's shape (16:9 at 4:3 wants 42.67): widened to fill it. Scaled by the
+     * fully-grown picture's shortfall, so it stays even while the picture grows out. */
+    if (v->src_wide > 0 && s->scaling == SCALE_FIT && wh > 0) {
+        float full_w = 256.0f + 2.0f * (float)(v->src_wide_full > v->src_wide ? v->src_wide_full : v->src_wide);
+        float full_ar = s->aspect == ASPECT_SQUARE ? full_w / sh : 4.0f / 3.0f * full_w / 256.0f;
+        float fill = ((float)ww / (float)wh) / full_ar;
+        if (fill > 1.0f && fill < 1.05f) ar *= fill;
+    }
     float dh = (float)wh, dw = dh * ar;
     if (dw > (float)ww) { dw = (float)ww; dh = dw / ar; }
     if (s->scaling == SCALE_WHOLE) {

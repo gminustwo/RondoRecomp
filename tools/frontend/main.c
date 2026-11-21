@@ -41,6 +41,10 @@
 #include "prompt.h"
 #include "programs.h"
 #include "update.h"
+#include "wide.h"
+#include "dedither.h"
+#include "titleart.h"
+#include "title_art_data.h"
 
 #define FRAME_RATE (7159090.0 / (455.0 * 263.0))   /* 59.826 Hz */
 #define AUDIO_RATE 44100
@@ -157,11 +161,60 @@ static bool no_save_files;   /* test runs: fresh backup RAM, nothing written to 
 static TitlePrompt prompt;   /* the title's PUSH RUN BUTTON! as this PC's button (pad set per frame) */
 static Moves moves;          /* the Gameplay page's 8-way whip and limp whip (moves.h) */
 static MoveOptions move_opts;   /* this frame's: off in hardcore mode and the tests */
+static Wide wide;            /* 16:9 widescreen (wide.h): decided before every frame */
+/* the player's art beside still screens (titleart.h): every *_sides.png in the profile folder
+ * (title_sides.png, map_sides.png, ...), each recognised by its middle */
+#define MAX_ARTS 8
+static TitleArt arts[MAX_ARTS];
+static int n_arts, art_last;   /* (the one that matched last is tried first) */
+
+/* one title art file (titleart.h) from a loaded PNG; name for the log */
+static void add_title_art(SDL_Surface *s, const char *name)
+{
+    if (!s || n_arts >= MAX_ARTS) return;
+    SDL_Surface *c = SDL_ConvertSurface(s, SDL_PIXELFORMAT_ARGB8888);
+    SDL_DestroySurface(s);
+    if (!c) return;
+    static uint32_t px[TITLEART_W * TITLEART_FILE_H];
+    if (c->w == TITLEART_W && c->h >= TITLEART_FILE_H) {
+        for (int y = 0; y < TITLEART_FILE_H; y++)
+            memcpy(px + y * TITLEART_W, (const uint8_t *)c->pixels + y * c->pitch, TITLEART_W * 4);
+        if (titleart_parse(&arts[n_arts], px, TITLEART_W, TITLEART_FILE_H)) n_arts++;
+        else SDL_Log("%s is not title art made by the converter: not used", name);
+    } else {
+        SDL_Log("%s is %dx%d, not %dx%d: not used", name, c->w, c->h, TITLEART_W, TITLEART_FILE_H);
+    }
+    SDL_DestroySurface(c);
+}
+
+/* the player's own *_sides.png in the profile folder, then the built-in ones
+ * (title_art_data.h) that no file of the same name replaces */
+static void load_title_art(const char *dir)
+{
+    int count = 0;
+    char **names = SDL_GlobDirectory(dir, "*_sides.png", SDL_GLOB_CASEINSENSITIVE, &count);
+    bool have_title = false, have_map = false;
+    for (int i = 0; names && i < count; i++) {
+        char path[1200];
+        snprintf(path, sizeof path, "%s%s", dir, names[i]);
+        have_title |= SDL_strcasecmp(names[i], "title_sides.png") == 0;
+        have_map |= SDL_strcasecmp(names[i], "map_sides.png") == 0;
+        add_title_art(SDL_LoadPNG(path), names[i]);
+    }
+    SDL_free(names);
+    if (!have_title)
+        add_title_art(SDL_LoadPNG_IO(SDL_IOFromConstMem(builtin_title_sides_png, sizeof builtin_title_sides_png), true),
+                      "built-in title_sides.png");
+    if (!have_map)
+        add_title_art(SDL_LoadPNG_IO(SDL_IOFromConstMem(builtin_map_sides_png, sizeof builtin_map_sides_png), true),
+                      "built-in map_sides.png");
+}
 
 /* A frame of the game. While rewinding (`live` false) the moves only draw: the frame shown is
  * one already played. */
 static void run_frame_as(bool live)
 {
+    wide_frame(&wide, &pce);
     prompt_before_frame(&prompt, &pce);
     moves_before_frame(&moves, &pce, &move_opts, live);
     pce_run_frame(&pce);
@@ -598,6 +651,7 @@ int main(int argc, char **argv)
     SDL_CreateDirectory(states_dir);
     Settings set;
     settings_load(&set, settings_path);
+    load_title_art(pref_dir);
     if (showcase) {   /* the options it changes are kept next to the script, not in the profile */
         snprintf(settings_path, sizeof settings_path, "%s.settings.ini", showcase);
         char serr[300];
@@ -614,6 +668,7 @@ int main(int argc, char **argv)
         if (features_dir) {
             set.skip = SKIP_AUTO;
             set.cheat_health = set.cheat_hearts = set.cheat_lives = true;
+            set.widescreen = true;   /* off by default, but tested (the window is 16:9) */
         }
     }
 
@@ -1153,7 +1208,20 @@ int main(int argc, char **argv)
         GameCheats cheats = {set.cheat_health, set.cheat_hearts, set.cheat_lives, set.maria_unlocked, set.play_maria};
         bool hardcore = ach_hardcore();
         if (hardcore) memset(&cheats, 0, sizeof cheats);   /* RetroAchievements' hardcore mode: none */
-        move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode};
+        move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode,
+                                  set.sticky_stairs && !hardcore && !test_mode};
+        vce_set_smooth_fades(set.smooth_fades && !test_mode);   /* only the picture: kept in hardcore */
+        {   /* widescreen fills the window's shape, up to 16:9 (off in hardcore mode: it changes
+             * the game's code and shows more of the level) */
+            int ww, wh;
+            SDL_GetRenderOutputSize(ren, &ww, &wh);
+            wide.edges = set.wide_edges;
+            wide.room_sides = set.room_sides;
+            wide.near_spawns = set.near_spawns;
+            wide.menus = set.wide_menus;
+            wide.want = set.widescreen && !hardcore && wh > 0
+                            ? wide_extent((double)ww / (double)wh, video_picture_aspect(&video, &set)) : 0;
+        }
         bool rewinding = false, ran_frame = false;
         if (menu_on_start_screen(&menu)) {
             /* the start screen: the game waits for Play (nothing runs, nothing sounds) */
@@ -1300,7 +1368,57 @@ int main(int argc, char **argv)
         }
 
         /* video */
-        video_upload(&video, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+        {   /* widescreen grows out of the 4:3 picture instead of appearing at once (the Prologue
+             * after its story scene, a scrolling room after a shaft): the columns shown each side
+             * ease towards what the frame has, about 90% of the way in half a second; back
+             * to 4:3 is at once (the game no longer draws them) */
+            static double shown;
+            int have = pce.vdc.fb_wide;
+            if (have <= shown) shown = have;
+            else if (ran_frame) {
+                shown += (have - shown) * 0.09 + 0.25;
+                if (shown > have) shown = have;
+            }
+            int cut = have - (int)shown;
+            const uint32_t *fb = pce.vdc.fb;
+            static bool dd_valid;   /* off: worked out again when turned on */
+            if (!set.smooth_dither) dd_valid = false;
+            if (set.smooth_dither && !test_mode) {
+                /* only the picture: kept in hardcore. Worked out once a game frame (a few ms),
+                 * not at every refresh of the screen. */
+                static uint32_t dd[PCE_FB_MAX_W * PCE_FB_MAX_H];
+                static uint64_t dd_frame;
+                if (!dd_valid || ran_frame || dd_frame != (uint64_t)pce.frame) {
+                    dedither(pce.vdc.fb, dd, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+                    dd_valid = true;
+                    dd_frame = (uint64_t)pce.frame;
+                }
+                fb = dd;
+            }
+            /* Video > Title art: the player's art beside the title screen (titleart.h), while
+             * the picture is not widened by the game itself */
+            static uint32_t ta[PCE_FB_MAX_W * PCE_FB_MAX_H];
+            int ta_ext = wide.want < TITLEART_SIDE ? wide.want : TITLEART_SIDE;
+            /* (also when the game draws it wide: Wide menus keeps the file select wide for a
+             * moment after it, and the stage map comes straight after it: the 256 in the
+             * middle are compared) */
+            bool art = false;
+            if (n_arts && set.title_art && !test_mode && ta_ext > 0 && pce.vdc.fb_w - 2 * have == 256 && !game_playing(&pce))
+                for (int k = 0; k < n_arts && !art; k++) {
+                    int a = (art_last + k) % n_arts;
+                    if (titleart_compose(&arts[a], &pce, fb + have, pce.vdc.fb_h, PCE_FB_MAX_W, ta_ext, ta)) {
+                        art = true;
+                        art_last = a;
+                    }
+                }
+            if (art) {
+                video_upload(&video, ta, 256 + 2 * ta_ext, pce.vdc.fb_h, PCE_FB_MAX_W, ta_ext);
+                video.src_wide_full = ta_ext;
+            } else {
+                video_upload(&video, fb + cut, pce.vdc.fb_w - 2 * cut, pce.vdc.fb_h, PCE_FB_MAX_W, have - cut);
+                video.src_wide_full = have;
+            }
+        }
         if (features_dir && !t_shots && pce.frame >= 17880) {
             /* screenshots: 16:9 window with each picture mode and screen effect, then the menu
              * pages */
@@ -1509,14 +1627,15 @@ int main(int argc, char **argv)
         }
         static bool t_stage1_shot;
         if (features_dir && !t_stage1_shot && pce.frame >= 20060) {
-            /* Stage 1 */
+            /* Stage 1, 16:9 */
             t_stage1_shot = true;
             char path[1200];
             video_draw(&video, &set);
             snprintf(path, sizeof path, "%s/stage1.bmp", features_dir);
             screenshot(ren, path);
-            TLOG("features: Stage 1 at frame %llu (state %02X/%02X)\n", (unsigned long long)pce.frame,
-                 pce.wram[RONDO_STATE], pce.wram[RONDO_SUB]);
+            TLOG("features: Stage 1 at frame %llu (state %02X/%02X), widescreen %d px a side of the %d wanted "
+                 "(background changes %s)\n", (unsigned long long)pce.frame, pce.wram[RONDO_STATE],
+                 pce.wram[RONDO_SUB], pce.vdc.fb_wide, wide.want, wide.patched ? "in" : "MISSING");
             TLOG("features: title screen's PUSH RUN BUTTON! %s (%d frames, as the %s)\n",
                  prompt.frames ? "replaced" : "NOT REPLACED", prompt.frames, prompt.pad ? "controller's" : "keyboard's");
         }
@@ -1562,7 +1681,7 @@ int main(int argc, char **argv)
              * them: Up and Attack (Up kept from the game) whips upward; Attack kept held hangs
              * the whip, and forward on the d-pad swings it ahead. */
             if (pce.wram[RONDO_CHARACTER] == 0) {
-                MoveOptions on = {true, true};
+                MoveOptions on = {true, true, false};
                 move_opts = on;
                 moves_reset(&moves);
                 int up_frames = 0, up_box = -999, limp_frames = 0, limp_ahead = -999, up_seen = 0;
@@ -1573,7 +1692,7 @@ int main(int argc, char **argv)
                     pce.pad = moves_pad(&moves, &pce, &on, pad, attack);
                     if (attack) up_seen |= pce.pad & PAD_UP;
                     run_frame();
-                    video_upload(&video, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+                    video_upload(&video, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.vdc.fb_wide);
                     char path[1200];
                     if (moves.draw && moves.dir == 2) {
                         up_frames++;
