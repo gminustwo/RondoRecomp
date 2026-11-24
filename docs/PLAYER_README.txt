@@ -230,6 +230,9 @@ Gameplay   Skip cinematics: Press START, Automatically, or Never. During the log
            made anew for RondoRecomp (none of the hack is used)
            Run (on by default): holding the Run control (LB / S) runs, as in Symphony of
            the Night (see Controls above); off, it does nothing
+           Discord status (on by default): while the Discord app runs on the same
+           computer, your Discord profile shows the stage you're in (or the title screen,
+           the start screen...), who you play as, and for how long. Off clears it at once
 RetroAchievements
            On / off, hardcore mode, your account (see RetroAchievements above)
 Cheats     Infinite health, infinite hearts (always 99), infinite lives. At a stage's end

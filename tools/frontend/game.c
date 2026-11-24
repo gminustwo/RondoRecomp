@@ -1,7 +1,18 @@
 /* See game.h. */
 #include "game.h"
 
+#include <stdio.h>
 #include <string.h>
+
+bool game_stage(const Pce *p, char *out, int cap)
+{
+    int step = p->wram[RONDO_STEP] & 0x3F;
+    /* steps 1, 3, $0D and $0F have no areas (there is no Stage 0', 1', 6' or 7') */
+    if (step > 0x10 || step == 1 || step == 3 || step == 0x0D || step == 0x0F) return false;
+    if (step == 0x10) snprintf(out, (size_t)cap, "Final stage");
+    else snprintf(out, (size_t)cap, "Stage %d%s", step / 2, step & 1 ? "'" : "");
+    return true;
+}
 
 void game_watch_reset(GameWatch *w, const Pce *p)
 {

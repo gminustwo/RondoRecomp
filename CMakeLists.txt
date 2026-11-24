@@ -79,7 +79,7 @@ if(SDL3_INCLUDE_DIR AND SDL3_LIBRARY)
   add_executable(rondo WIN32 tools/frontend/main.c tools/frontend/locate.c tools/frontend/game.c tools/frontend/prompt.c tools/frontend/moves.c
     tools/frontend/input.c tools/frontend/binds.c tools/frontend/menu.c tools/frontend/settings.c tools/frontend/video.c tools/frontend/theme.c tools/frontend/ui_fonts.c
     tools/frontend/http.c tools/frontend/achievements.c tools/frontend/update.c tools/frontend/child.c
-    tools/frontend/showcase.c runtime/recomp/recomp_none.c)
+    tools/frontend/showcase.c tools/frontend/discord.c runtime/recomp/recomp_none.c)
   target_include_directories(rondo PRIVATE ${SDL3_INCLUDE_DIR} tools/recomp)
   target_link_libraries(rondo PRIVATE pce rcheevos ${SDL3_LIBRARY})
   if(WIN32)

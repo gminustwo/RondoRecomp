@@ -8,6 +8,8 @@
  *        0A story cinematic (e.g. before Stage 0; RUN does not skip it)
  *   $8D  lives (BCD)      $94  hearts (BCD)      $98  health (92 = full bar)
  *   $9F  character: 0 Richter, 1 Maria (each stage loads that character's code)
+ *   $81  the stage's step: bits 0-5 the stage (game_stage), bit 7 its second area, bit 6
+ *        a flag (set by the file menu until Stage 0 starts)
  *   $1F40-$1F56  the save record of the current game; $1F40 bit 0: Maria can be chosen
  *   objects: 88 slots in parallel arrays, slot 0 is the player; X velocity $0D80 (high)
  *        / $0DD8 (low), 8.8 pixels a frame; facing $0AC0 (0 right, 1 left); animation
@@ -26,6 +28,7 @@
 #define RONDO_HEALTH 0x98
 #define RONDO_SUB 0x31
 #define RONDO_CHARACTER 0x9F
+#define RONDO_STEP 0x81
 #define RONDO_UNLOCKS 0x1F40
 #define RONDO_PLAYER_VX_HI 0x0D80
 #define RONDO_PLAYER_VX_LO 0x0DD8
@@ -92,6 +95,12 @@ static inline bool game_power_on_skippable(const Pce *p)
 }
 static inline void game_allow_power_on_skip(Pce *p) { p->wram[RONDO_SEEN_INTRO] = p->wram[RONDO_SEEN_LOGO] = 1; }
 static inline bool game_playing(const Pce *p) { return game_state(p) == RONDO_PLAYING; }
+
+/* The stage being played, as its title card names it: "Stage 0" ... "Stage 7", the other
+ * routes "Stage 2'" ... "Stage 5'", and "Final stage". From the stage's step ($81, the index
+ * of the game's area tables at 6A:7230 / 6A:7241; docs/findings.md, "Stages"): step 2n is
+ * Stage n, step 2n + 1 Stage n', step $10 the final stage. False outside a stage. */
+bool game_stage(const Pce *p, char *out, int cap);
 
 void game_watch_reset(GameWatch *w, const Pce *p);
 /* Call after every emulated frame. */

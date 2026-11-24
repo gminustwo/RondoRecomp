@@ -125,6 +125,7 @@ Addresses are offsets in work RAM (bank $F8; $2000+ in the game's address space)
 | $8D | lives, BCD (3 at the start) |
 | $94 | hearts, BCD (shown on the HUD; 10 at the start) |
 | $98 | health; $5C (92) is a full bar |
+| $81 | the stage's step (see "Stages" below): bits 0-5 the stage, bit 7 its second area, bit 6 a flag the file menu sets until Stage 0 starts |
 | $A2 | current area (00 before Stage 0, 0A, 10, ...) |
 
 - RUN skips the opening (state 02) but not the Stage 0 cinematic (state 0A, frames 12531-16098
@@ -200,6 +201,41 @@ hearts back from `$350D` and sets `$37`, which main state 5 turns into the area 
 So the end needs health and hearts to reach 0 in the playing state: a cheat that undoes every
 loss of health there stops the stage from ending (issue 6). `game.c` lets either be counted
 down once it drops more than 12 times in a second, which damage and sub-weapons never do.
+
+## Stages
+
+zp `$81` is the stage's step. The stage load (6A:6D78, run by the area change) takes the area
+`$A2` from `$7230 + step` (bank 6A), or from `$7241 + (step & $7F)` with bit 7 set (the stage's
+second area: Stage 1's `$10`, then `$0E`, the wyvern's wall), plus the character `$9F`. Its data
+set `$9C` comes from `$7115` / `$7126` the same way (6A:6F9E). At an area's end (6A:6CC8): from
+the first area the step gets bit 7, and bit 0 too when the exit's type `$8C` is 5 or more (the
+other route); from the second area it goes on to `(step & $7F) + 2`. Some are changed after
+that: `$80` (Stage 0 has one area) goes to 2, `$85` to 7 when `$83` = `$0A`, `$0B` to `$0A`
+unless bit 0 of `$3F51` or `$3F56` (save record) is set, `$8B` to `$0C`, `$8C` to `$0E`.
+
+So step 2n is Stage n and 2n + 1 is Stage n'; steps 1, 3, `$0D` and `$0F` have no areas (`$FF`
+in `$7230`). Each was checked against the game's own title card, by setting `$81` to `$80` +
+step - 2 (the second area of the step before) in the area change after Stage 0 (`$0C`: `$0A`
+with `$8C` = 5, the game's own way there):
+
+| Step | Area | Title card (English disc) |
+|---|---|---|
+| `$00` | `$0A` | STAGE 0 "Prologue" |
+| `$02` | `$10` | STAGE 1 "Dinner of Flames" |
+| `$04` | `$00` | STAGE 2 "God, Grant Me Strength" |
+| `$05` | `$08` | STAGE 2' "Breaking Through the Front" |
+| `$06` | `$04` | STAGE 3 "An Evil Prayer Summons Darkness" |
+| `$07` | `$14` | STAGE 3' "Release from the Thirst for Blood" |
+| `$08` | `$18` | STAGE 4 "Atop Countless Terrors" |
+| `$09` | `$28` | STAGE 4' "Fortress of the Water Demon" |
+| `$0A` | `$26` | STAGE 5 "The Devil Flies by Night" (the ghost ship) |
+| `$0B` | `$2A` | STAGE 5' "Wandering" |
+| `$0C` | `$1C` | STAGE 6 "A Nightmare Reborn" |
+| `$0E` | `$2C` | STAGE 7 "Hear now the Requiem of Blood" |
+| `$10` | `$2E` | FINAL "Bloodlines" |
+
+The areas are Richter's (`$9F` = 0); Maria's are one more. `game_stage` (`tools/frontend/game.h`)
+names the stage from the step, for the Discord status.
 
 ## Camera, scrolling and objects
 
