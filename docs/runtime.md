@@ -299,6 +299,21 @@ picture in the game's own letters, cut from those sprites' patterns in VRAM, wit
 and Y drawn in the same style in `prompt.c`. Its colours come from the palette as it is, so
 it fades with the title. No game graphics are kept in the source.
 
+The Discord status (`discord.c`, Gameplay page "Discord status", on by default): a thread
+talks to the Discord app on the same computer through its local IPC endpoint (the named
+pipe `\\.\pipe\discord-ipc-N` on Windows, the Unix socket `discord-ipc-N` in
+`$XDG_RUNTIME_DIR`, `$TMPDIR` or `/tmp`, with the Flatpak and Snap folders, on Linux) with
+Discord's own framing: a handshake with the application id, then `SET_ACTIVITY`. Nothing
+else goes out to the network, and without the app it looks again every 20 s. Each frame
+`main.c` says what it shows: the start screen, the intro, the title screen, the file menu,
+a story scene, or in play the stage (`game_stage`, from `$81`: docs/findings.md, "Stages")
+and "Playing as Richter / Maria" ("Paused" while the menu is open). A change goes out at
+most every 5 s (Discord takes 5 in 20 s); the elapsed time counts from the game's start.
+Turning it off clears it at once; closing the game clears it too. Test runs never start it.
+The picture is the application's Rich Presence art asset `icon`; `RONDO_DISCORD_APP_ID`
+names another application. `rondo.log` ends with how it went (`discord: shown on Discord
+(last: Stage 5 | Playing as Maria)`, `the Discord app isn't running on this computer`, ...).
+
 Start screen (`menu.c` page `PAGE_START`, the in-game menu's root swapped for one with Play
 at the top; the option pages return to whichever root opened them): shown when rondo.exe
 starts unless `--play` or the Start screen option is off. The game is loaded but does not

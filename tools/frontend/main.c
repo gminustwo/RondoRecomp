@@ -25,6 +25,7 @@
 
 #include "achievements.h"
 #include "capture_script.h"
+#include "discord.h"
 #include "game.h"
 #include "input.h"
 #include "locate.h"
@@ -70,6 +71,34 @@ static void draw_banner(SDL_Renderer *ren, const char *text, bool bottom_right)
     float x = bottom_right ? (float)ww - w - m : ((float)ww - w) * 0.5f, y = bottom_right ? (float)wh - h - m : m;
     th_plaque(ren, x, y, x + w, y + h, u, 1.0f);
     th_text(ren, TH_FONT_UI, px, x + w * 0.5f, y + h * 0.5f, TH_TEXT, text, 0.5f, 0.5f, track, TH_NONE);
+}
+
+/* ---- the Discord status ------------------------------------------------------------- */
+
+/* What the player's Discord profile says (discord.h): the start screen, the game's own
+ * screens, or the stage and who is playing it ("Paused" while the menu is open over it).
+ * Between areas, and on screens it doesn't know, it keeps what it said. */
+static void discord_presence(const Pce *p, const Menu *m, bool on)
+{
+    static char details[64], state[64];
+    char stage[32];
+    uint8_t s = game_state(p);
+    if (menu_on_start_screen(m)) {
+        snprintf(details, sizeof details, "Start screen");
+        state[0] = 0;
+    } else if (game_in_power_on(p) || s == RONDO_OPENING || s == RONDO_TITLE || s == RONDO_SAVE_MENU ||
+               s == RONDO_CINEMATIC) {
+        snprintf(details, sizeof details, "%s", game_in_power_on(p) ? "Intro"
+                                                : s == RONDO_SAVE_MENU ? "File select"
+                                                : s == RONDO_CINEMATIC ? "Story scene"
+                                                                       : "Title screen");
+        state[0] = 0;
+    } else if ((s == RONDO_PLAYING || s == RONDO_AREA_CHANGE) && game_stage(p, stage, sizeof stage)) {
+        snprintf(details, sizeof details, "%s", stage);
+        snprintf(state, sizeof state, "Playing as %s", p->wram[RONDO_CHARACTER] == 1 ? "Maria" : "Richter");
+    }
+    bool paused = m->open && !menu_on_start_screen(m) && state[0];
+    discord_set(on, details, paused ? "Paused" : state);
 }
 
 /* ---- choosing the disc image ------------------------------------------------------- */
@@ -724,6 +753,8 @@ int main(int argc, char **argv)
     }
     update_leftovers();
     if ((set.check_updates && !test_mode) || update_dir) update_check_start();
+    bool discord_on = !test_mode && !showcase;   /* (test runs leave the player's Discord alone) */
+    if (discord_on) discord_start();
     bool restart = false, told_update = false;
     int t_upd_phase = 0, t_upd_loops = 0;
     bool t_upd_shot = false;
@@ -1145,6 +1176,7 @@ int main(int argc, char **argv)
             told_update = true;
             if (!menu_on_start_screen(&menu)) show_osd("%s (start screen)", menu.notice);
         }
+        if (discord_on) discord_presence(&pce, &menu, set.discord);
 
         prompt.pad = input_pad_last(&in);
         prompt.line = prompt.pad ? (set.bind_pad[ACT_PAUSE] == SDL_GAMEPAD_BUTTON_START ? "PUSH  START  BUTTON!"
@@ -1657,6 +1689,7 @@ int main(int argc, char **argv)
                 fprintf(lf, "frames late (over 1.5 frame times apart): %llu of %llu (%.1f%%), worst %.1f ms\n",
                         (unsigned long long)pace_late, (unsigned long long)pace_frames,
                         pace_frames ? 100.0 * (double)pace_late / (double)pace_frames : 0.0, (double)pace_worst / 1e6);
+                if (discord_on) fprintf(lf, "discord: %s\n", discord_status_text());
                 fclose(lf);
             }
         }
