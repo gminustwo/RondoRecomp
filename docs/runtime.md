@@ -189,8 +189,8 @@ with photographs of it counting.
 
 Modules: `input.c` (mapping, macros, menu navigation), `menu.c` (pages, persisted to
 `settings.ini` by `settings.c`), `video.c` (placement and filtering), `game.c` (what the
-frontend knows about the game: main state, cheats, run) and `prompt.c` (the title's prompt);
-the last two are also linked into `rondo_headless`.
+frontend knows about the game: main state, cheats, run), `prompt.c` (the title's prompt) and
+`wide.c` (16:9 widescreen, below); the last three are also linked into `rondo_headless`.
 
 Video: aspect 4:3 / square pixels / stretch, fit or whole multiples, filters Sharp (nearest
 upscale to a whole factor into a render target, then linear to the final size), Nearest and
@@ -203,6 +203,177 @@ for telling the game's pacing from a recorder's). VSync
 on the screen's refresh, so it never tears; the timer still sets the pace, so on a 60 Hz
 screen about one frame in 350 is shown twice. Test runs turn it off to run uncapped.
 `rondo.log` records the renderer and whether VSync is on.
+
+16:9 widescreen (`wide.c`; Video > Widescreen, off by default, off in hardcore mode). The VDC
+draws `vdc.wide` extra columns each side of a 256-pixel picture from the background map and
+sprite table (`fb_wide` latched per frame; the original 256 start at `fb[fb_wide]`; the 16
+sprites a line limit is lifted in a widened picture; columns beyond the room's walls, or
+clipped rows, are black behind the sprites). The extension fills the window's shape
+(`wide_extent`: 42 a side for 16:9 at 4:3 TV pixels, 70 with square pixels but at most 64
+(`WIDE_STREAMED`: the background is drawn (STREAM / 32) * 32 = 64 px past the 256 at all
+times; at 70 its last 6 px showed what the map held before, every 32 px walked); rounded down
+to even) up to `WIDE_MAX` = 72. The few pixels rounding leaves short of the window's shape
+are taken up by widening the picture to fill it (`video.c`, `place`, under 5%, Fit screen
+only). The game itself already prepares 64 px past each side: objects spawn and start
+moving 64 px out, so at 42 they are left exactly as the game has them and play is
+unchanged. Past 64 (square pixels) objects spawn and start moving 72 px out instead
+(below). 0.6-0.12 went to 112 px for 21:9 and moved spawning, removal and screen-fixed
+generators out to 128 px at every width, which made enemies come on earlier. The changes
+are byte patches, each checked against the original bytes (the game loads code from the
+disc as it goes):
+
+- Background (put in or taken out as a room starts, `Pce.on_entry` at 6F:A94C / A9B1, only
+  for rooms the camera scrolls sideways through): columns streamed 80 px out (enough for
+  72; 96 or 112, as in 0.6-0.12, put other layers' blank column tops into the view of
+  Stage 2-1's far-trees band, which is not streamed itself, as a black strip) (and drawn at
+  the old 64 too, for scenery stage code first draws to 64 only), the room start drawing 16
+  columns, rows streamed during vertical scrolling drawn across the whole 512-pixel map.
+  Room starts take a few frames longer (Stage 1: 5 frames). While a column is drawn at the
+  old distance the distance table holds the old value; a frame that ends right then (the
+  game running long) still counts the change as in (`patches_in`; before, such a frame was
+  shown 4:3, a bar flicking in and out every few seconds).
+- Objects (put in or out with the background, in every widened scrolling room): spawning
+  (69:1E68 / 1E7F) and starting to move (70:A0B0 / A0BD) at `object_reach` past the 4:3
+  screen, the extension + 50 px (`OBJECT_MARGIN`: wide sprites drawn around their X, such as
+  the broken bridge's sections, appeared inside the picture's edges at 72), at most 120:
+  92 at 42 px a side, 120 at 70. Screen-fixed generators follow (`move_generators`). Removal
+  stays at 128 px. A save state made in a widened room holds the changes with their bytes
+  moved: taken as in, so they follow the frame's values from the first frame.
+- Drawing (follows each frame's choice of wide or 4:3): the sprite builder (72:8000) lets
+  pieces through out to `WIDE_MAX` px either side; objects the game parks just off the left of its
+  256 pixels (the Prologue's horses) are not drawn, via a per-slot table at $FE80 in our
+  bank $00.
+- Echoes, for weather drawn as objects (Stage 2's rain: two objects of type 07, kind $C2,
+  fixed to the screen, sweeping down and left from X 168 to 71 every 18 frames, each frame
+  a spread of 13 drops about 128 px either side, so it only ever covers 256 pixels). Each
+  object is drawn through $FC00 (72:803F), which, for a slot the ECHO_TABLE at $FCC0 marks,
+  draws it again with its X 256 more and 256 less, while 16 sprite entries are left. The
+  culling (72:8123 through $FC40) tells the copies apart by $8066's return address on the
+  stack and keeps their pieces only past the 256 pixels on their own side, so the rain tiles
+  across the wider picture and the original 256 pixels show what they did (but for a drop
+  crossing the left edge). The host marks objects fixed to the screen, not the HUD, on it
+  and moving (a banner or a generator does not). Checked over 600 frames of the rain:
+  game RAM unchanged, interpreter and recompiled pictures identical.
+- The HUD (slots $57, $56) is moved to the left edge of the widened picture (from anywhere
+  widescreen could have put it, so a save state from another session is put right). Its
+  sprites are built during a frame and shown with the next, whose picture is shifted for the
+  camera as this frame leaves it, so with Level ends it is put again as the sprite building
+  starts (72:8000, through `Pce.on_entry`), the camera moved by then: put before the frame it
+  was a step behind and jittered by a pixel as the camera stepped 1 and 2 px. A boss's
+  health bar (slot $55, type 5, sliding in from X 254 to 216) cannot be moved as an object
+  (past 253 its own code slides it in again), so its sprites (patterns $1F8-$1FF) are drawn
+  at the picture's right edge instead (`vdc_set_sprite_move`).
+- Edge spawns: some rooms send enemies in from fixed places just past the screen's edges,
+  whatever the camera does (Stage 2's castle hall: ghouls, kind $29, at X -24 / 280, and
+  kind $31 at 272), which would put them inside the wider picture. On the frame such an
+  object is first drawn at -16 / -24 / -32 or 272 / 280 / 288 (not fixed to the screen, not
+  the HUD; things thrown from off screen come out where the thrower is), it moves out by the
+  picture's extra width on that side, keeping its distance from the edge, at most 80 px past
+  the screen (`EDGE_SPAWN_MAX`: kind $31 removes itself from 86 px out).
+- Scenery moved round: Stage 2's bridge pillars are three objects (kind $44, 128 px apart)
+  the game moves 384 px to the other side once one passes X -32 or 287, out of the 4:3
+  picture but inside the wider one. Objects of a kind seen jumping by 376-392 px, or a row
+  (every object of a kind, three or four, exactly 128 px apart: not a splash's particles,
+  three of which can line up by chance and, echoed, slowed the bridge boss), are echoed like the rain (drawn again 256 px
+  either side, the copies kept only past the 256 pixels on their own side), which puts a
+  copy where the next pillar round would be. The game moves a pillar 383 px, not 384, so
+  each row is kept exactly 128 px apart (a pillar a pixel or two out of step is put back:
+  else a copy lands a pixel off the pillar it meets). No copies onto a pillar the game is
+  hiding (frame 0), and none that would be seen within 96 px of a room's end wall: the
+  bridge ends in a pier where the next pillar would be, and the game, moving its pillars
+  only out of the 4:3 picture's sight, never shows one there. Forgotten as each room starts.
+- Scenery bands drawn only as far as the 4:3 picture shows them (Stage 2's bridge: the
+  distant hills, castle and trees, blank tiles over 16 of the map's 64 columns): each map
+  row seen scrolled apart from the playfield in the room (a row a playfield line shows in
+  the same frame excepted) has its longest blank stretch, if 12 tiles or more, filled from
+  both ends with the tile most often after (before) the one at its end in the band's rows
+  (`scenery_fill`), drawn beside the original 256 pixels only (`vdc_set_map_fill`, by map
+  position, so it scrolls with the band). Gaps between clouds are shorter and left alone; a row less than half drawn
+  is no band (Stage 2's first room: an empty bottom row but for a tower, once seen scrolled
+  apart, was filled with floor tiles).
+- The room's walls are measured directly from the camera while it is within the room's
+  limits (`room_walls`): the boat ride's room is 3584 px wide, more than the 2048 a wrapped
+  12-bit distance covers, and its left wall came out on the screen's right (the background all
+  black). Only the rain (kind $C2, type 7) is echoed as weather: the boat ride's boat and
+  ferryman, fixed to the screen and bobbing, were drawn again 256 px over.
+- Level ends follow the camera the game built its sprites with (`hud_at_build`, recorded and
+  used by the next `wide_frame`): the game draws the playfield with that same camera, which is
+  the camera before or after `wide_frame`'s point depending on how long its frames run (a slow
+  frame, as on Stage 2's bridge, moves the camera while the next picture is drawn; on the
+  stairs below it the game is done in time). Worked out from the camera at `wide_frame`, the
+  picture and HUD shook by the camera's step at a room's end.
+- Level ends (Video > Level ends, on by default; `Wide.edges`): within the extension of a
+  scrolling room's left or right limit the picture is shifted (`vdc_set_wide_shift`,
+  host-side, latched per frame like `fb_wide`; the original 256 then start at
+  `fb[fb_wide - shift]`) so all the extra width is on the room's side and nothing past its
+  wall shows; a room narrower than the picture is centred. A few patch bytes follow the
+  shift each frame (`Patch.var`, written by `update_vars`; compared as anything): the sprite
+  builder's right and left bounds and the echo copies' right bound grow by the shift; spawning
+  and starting to move on the open side go out to extension + shift + 8, at most 120 px
+  (removal is at 128), screen-fixed generators following (`move_generators`, now any
+  distance); objects keep the game's 64 (72 with square pixels) on the other side and
+  anywhere away from a room's end. Because the object patches are mostly their varying
+  byte, whether they are in is kept in a flag (`objects_on`), not read from memory; with
+  Level ends on they go in at 42 too (at the game's 64 until a shift needs more). A room
+  starting within the extension of its left end is first drawn from the camera instead of
+  144 px left of it (the room start's offset byte $B0 for $20; at its right end $00, from
+  176 px left), so with square pixels the 140 px on the open side are there from the first
+  frame. Off, everything is as before (frames identical). `rondo_headless --wide-edges`
+  turns it on and prints each change of the shift. The stage title letters (slots $54-$55)
+  stay centred on the game's 256 pixels, so they sit left of centre while the picture is
+  shifted at a level's start.
+- Wide menus (Video > Wide menus, on by default; `Wide.menus`), states $03 / $04 (title,
+  file select): the menus' map holds nothing of theirs past the 256 pixels (filler tile
+  $110, or the other page), so the VDC draws side tiles there instead
+  (`vdc_set_side_tiles`, host-side: 12 BAT words a map row each side, keyed by the map row
+  and the column's distance from the first / last column the 256 pixels show; no sprites
+  beside the 256 meanwhile). `menu_sides` works them out each frame from the last frame's
+  map: one X scroll for every line (else not), the map rows shown (`vdc_row_map_y`), the
+  pairs of neighbouring BAT words across the shown columns of those rows counted, and each
+  row carried on from its edge word by the word most often after (before) it, seen at
+  least twice. The file select's waves are tiles 144-147 and 148-149 joined in any order,
+  so they carry on seamlessly; the title's clouds have no repeat and stay 4:3. Wide once
+  97% of the side tiles fill for 8 frames in a row (`MENU_FRAMES`); then held with the last
+  sides that filled for up to 60 frames that do not (`MENU_HOLD`: a page sliding over puts
+  its frames at the edges), so it does not flick to 4:3. While the menu's scroll moves (a page sliding
+  over: the map holds both pages side by side), the sides show the map's own entries wherever
+  the picture has not wrapped round the map, and sprites beside the 256 pixels too
+  (`vdc_set_side_real`), so the page coming in enters at the screen's edge and the one going
+  out leaves at the other. `rondo_headless --wide-menus`.
+- Title art (Video > Title art, on by default; `titleart.c`): the title's and the stage map's
+  art has no repeat, so their sides come from art files, 396 x 228: the built-in
+  title_sides.png and map_sides.png (`title_art_data.h`, compiled into the game), each
+  replaced by a file of the same name in the profile folder, and any other `*_sides.png`
+  there (up to 8 in all). They hold no picture of the game's: each side
+  pixel (columns 0-69, 326-395 of rows 0-224) is a palette entry (R = low 8 bits, G bit 0 =
+  bit 8; alpha 0 = none), drawn with what that entry held when the line beside it was drawn
+  (`vdc_line_palette`, taken every 16 lines: the lightning changes colours while the picture is
+  drawn), so the art follows the fades, the clouds' shimmer and the lightning as
+  the game's pixels do; rows 225-227 hold 'R' 'S' '1' and the screen's 28 x 32 map entries
+  (`titleart_layout`: each tile row's middle line's map row and first column). A frame is the
+  screen when 85% of its map entries match (75% once shown: a prompt blinks, a stage name
+  changes), which holds from its first frame (the map is set before the fade-in); while the
+  middle is all black (its palette is up before its background is), the sides are black too.
+  The screen's first column, a shade darker, is drawn as the next. The files are made by a
+  converter from art generated around a template: `rondo_headless --dump-layout FRAME:FILE`
+  writes the screen's map entries and each background pixel's palette entry for it, and
+  each side colour (snapped to the screen's own) becomes the entry the screen's own edge uses
+  it for, nearest row first (the same colour can be in two palettes, only one of which flashes).
+  `rondo_headless --title-art FILE` (the file's pixels, raw ARGB) writes shots with it. The
+  Setup SDK's source list (`tools/make_sdk.cmake`) has `titleart.c`.
+
+A room is shown wide when the background changes are in and it scrolls sideways, or when it
+is one screen wide but its scenery scrolls past (the carriage chase); bands of rows holding
+something parked off-screen (the Prologue's carriage) are cut to 256 until it drives in. The
+picture grows out to the sides over about half a second. Save states hold the patched code
+(the four `Vdc` widescreen ints are cleared in the file, so states keep the 1.2 layout).
+`rondo_headless --wide N` runs with N px a side, `--wide-skip LIST` leaves patches out,
+`--wide-report FRAME` lists which are in. Checked on the USA disc (Prologue, Stage 1) with
+the interpreter and the recompiled build. On the interpreter, with the drawing changes alone,
+game RAM matches a 4:3 run frame for frame (only the sprite builder's zero-page and stack
+scratch differ). On the recompiled build, drawing more sprite pieces in the CPU-heavy
+carriage chase moves one of its slowdown frames. The features test runs with widescreen on
+in its 16:9 window.
 
 Screen effects (`video.c`, `draw_effect`; Off by default): passes of the ordinary renderer,
 no shaders. The picture is drawn at its size on screen into a render target, softened

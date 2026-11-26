@@ -239,9 +239,9 @@ names the stage from the step, for the Discord status.
 
 ## Camera, scrolling and objects
 
-Found for widescreen (an option from 0.6 to 0.12, taken out in 0.13; tried again after 1.2
-with a camera that stops at the walls and taken out before 1.3: see git history for
-`tools/frontend/wide.c`).
+Found for the widescreen option (an option from 0.6 to 0.12, taken out in 0.13; tried again
+upstream after 1.2 with a camera that stops at the walls and taken out before 1.3; back as
+16:9 in `tools/frontend/wide.c`, see docs/runtime.md).
 
 - Scroll layers at $1E00+ (8 layers): X sub/low $1E00/$1E08, X page (mod 16) $1E96, Y
   $1E18/$1E20/$1E28, velocities (8.8) $1E7E/$1E86 (added each frame by 6F:A6F4), map page
@@ -313,6 +313,15 @@ with a camera that stops at the walls and taken out before 1.3: see git history 
   band scrolls and the carriage drives in from the left. Its title shows with `$31` = 05
   (frames 16817-17008 of the capture run). The rain is one object (kind $26, slot $4F) moving
   24 px a frame and cycled around X 0-255, its drops (pattern $193) spread around it.
+- Richter's walk with the camera (camera mode `$1EB6` 0, table at 6A:6689): walking right
+  6A:6817, left 6A:6946/695A. The camera follows to keep him at X 128; the right limit is
+  page and X (`$1EC6/$1EC7`, compared at 6A:68EA), the left a page alone (`$1EBE`, 6A:6971:
+  the camera stops at that page's X 0). At a limit he walks on the screen, held at X $10
+  (6A:6A06) and $F0 (6A:68AF). Area `$A2`, room `$83`: Stage 3's three-eyed skull is area
+  $14 room 0, one screen at camera $300. Beside it the level goes on: a bat generator
+  (kind $35) 250 px left with launchers ($36) and another at $4A0 send bats ($34) once the
+  camera moves; the fight's controller (slot $10, kind $33) makes a bat at X -32 now and
+  then (6A:615C) that is removed the next frame (6D:B64B).
 - A boss's health gauge is an object fixed to the screen like the HUD: Stage 1's wyvern's is
   slot $55 (kind 0, type 5) at X 216. Stage titles use $54-$55 too, sliding in from X -104.
 - The sprite builder (72:8000) keeps the object slot it is drawing in zp `$D9`; pieces with

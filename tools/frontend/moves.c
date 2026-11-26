@@ -247,20 +247,21 @@ static bool gather(Moves *m, Pce *p)
 static void draw_turned(const Moves *m, Pce *p)
 {
     Vdc *d = &p->vdc;
+    int org = d->fb_wide - vdc_fb_shift();   /* where the picture holds screen X 0 */
     const uint32_t *argb = &p->vce.argb[0x100];
     float a = (float)m->dir * PI_4, c = cosf(a), s = sinf(a);
     for (int y = 0; y < MOVES_WIN_H; y++) {
         int py = m->win_y + y;
         if (py < 0 || py >= d->fb_h) continue;
         for (int x = 0; x < MOVES_WIN_W; x++) {
-            int px = m->win_x + x;
-            if (px < 0 || px >= d->fb_w) continue;
+            int px = m->win_x + x;   /* screen X; the picture holds it at px + org */
+            if (px + org < 0 || px + org >= d->fb_w) continue;
             float f = (float)((px - m->pivot_x) * m->facing), u = (float)(m->pivot_y - py);
             float f0 = f * c + u * s, u0 = u * c - f * s;
             if (f0 < -1.5f) continue;                       /* (only what is ahead of the hand) */
             int sx = m->pivot_x + (int)lroundf(f0) * m->facing - m->win_x, sy = m->pivot_y - (int)lroundf(u0) - m->win_y;
             if (sx < 0 || sx >= MOVES_WIN_W || sy < 0 || sy >= MOVES_WIN_H || !m->win[sy][sx]) continue;
-            d->fb[py * PCE_FB_MAX_W + px] = argb[m->win[sy][sx]];
+            d->fb[py * PCE_FB_MAX_W + px + org] = argb[m->win[sy][sx]];
         }
     }
 }
@@ -394,6 +395,7 @@ static int whip_length(const Moves *m)
 static void draw_limp(const Moves *m, Pce *p)
 {
     Vdc *d = &p->vdc;
+    int org = d->fb_wide - vdc_fb_shift();   /* (as above) */
     const uint32_t *argb = &p->vce.argb[0x100];
     int len = whip_length(m);
     if (len < TIP + LINK) return;
@@ -407,14 +409,14 @@ static void draw_limp(const Moves *m, Pce *p)
         for (int py = y0; py <= y1; py++) {
             if (py < 0 || py >= d->fb_h) continue;
             for (int px = x0; px <= x1; px++) {
-                if (px < 0 || px >= d->fb_w) continue;
+                if (px + org < 0 || px + org >= d->fb_w) continue;   /* (screen X, as above) */
                 float df = ((float)px - x) * (float)m->facing, du = y - (float)py;
                 float fl = df * c + du * sn, ul = du * c - df * sn;
                 if (fl < -0.5f || fl >= l - 0.5f || fabsf(ul) > w) continue;
                 int sx = m->pivot_x + (src + (int)lroundf(fl)) * m->facing - m->win_x;
                 int sy = m->pivot_y - (int)lroundf(ul) - m->win_y;
                 if (sx < 0 || sx >= MOVES_WIN_W || sy < 0 || sy >= MOVES_WIN_H || !m->win[sy][sx]) continue;
-                d->fb[py * PCE_FB_MAX_W + px] = argb[0x10 | (m->win[sy][sx] & 0xF)];   /* (not flashing) */
+                d->fb[py * PCE_FB_MAX_W + px + org] = argb[0x10 | (m->win[sy][sx] & 0xF)];   /* (not flashing) */
             }
         }
         x = ex;

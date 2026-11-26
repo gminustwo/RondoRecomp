@@ -34,6 +34,9 @@ set(FRONTEND_SOURCES
   tools/frontend/moves.c
   tools/frontend/torchglow.c
   tools/frontend/prompt.c
+  tools/frontend/wide.c
+ 
+  tools/frontend/titleart.c
   tools/frontend/input.c
   tools/frontend/binds.c
   tools/frontend/menu.c

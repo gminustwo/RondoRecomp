@@ -4,7 +4,8 @@
  *
  * Work RAM ($F8 bank, $2000-$3FFF in the game's address space), found by watching the
  * game run (see docs/findings.md, "Game state"):
- *   $30  main state: 02 opening, 03 title, 04 save menu, 05 playing, 06 area change,
+ *   $30  main state: 02 opening and the title screen, 03 demo play (the title's attract mode,
+ *        the save menu's Tactics runs), 04 save menu, 05 playing, 06 area change, 07 game over,
  *        09 story scene with voiced pictures (after Stage 5's Death: Shaft and Annette),
  *        0A story cinematic (e.g. before Stage 0; RUN skips neither)
  *   $8D  lives (BCD)      $94  hearts (BCD)      $98  health (92 = full bar)
@@ -38,10 +39,11 @@
 
 enum {
     RONDO_OPENING = 0x02,
-    RONDO_TITLE = 0x03,
+    RONDO_TITLE = 0x03,        /* (in fact demo play: the attract mode and the Tactics runs) */
     RONDO_SAVE_MENU = 0x04,
     RONDO_PLAYING = 0x05,
     RONDO_AREA_CHANGE = 0x06,
+    RONDO_GAME_OVER = 0x07,    /* $31: 01-03 GAME OVER over the frozen level, then the continue screen */
     RONDO_SCENE = 0x09,        /* a story scene of voiced pictures (after Death) */
     RONDO_CINEMATIC = 0x0A,
 };

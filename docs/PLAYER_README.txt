@@ -214,6 +214,25 @@ states, choose the slot, reset, back to the start screen, quit, and:
 Video      Fullscreen (uses the screen's own resolution, e.g. 4K)
            VSync: on (the default), each frame is shown when the screen refreshes, so the
            picture never tears; off shows it at once
+           Widescreen (experimental): a page of its own with everything below up to
+           Title art
+           Widescreen: Off (4:3, the default) or 16:9, more of the level on each side;
+           see below
+           Level ends: with widescreen, at the start or end of a level, Picture moves
+           over (the default) or Black; see below
+           Wide menus: with widescreen, the file select menus wide too (On, the default)
+           or 4:3; see below
+           Spawn distance: with widescreen, Far (the default): enemies and items come to
+           life further out, so they come into the wider picture from beyond it; Near:
+           where the 4:3 game makes them (its own timing, for anything that plays
+           differently with Far)
+           Room sides: with widescreen, rooms kept 4:3 (boss rooms, shafts) shown with
+           the room mirrored at each side, fading to black (On, the default) or black
+           Open arenas: with widescreen, boss rooms with no wall at their sides (so far
+           Stage 3's giant skull) played across the whole 16:9 picture, Richter free
+           to walk to its edges (On, the default), or locked to the 4:3 screen
+           Title art: with widescreen, your own picture beside the title screen (On, the
+           default; only if you have made one); see below
            Aspect ratio: 4:3 (as on a TV), square pixels, or stretched to fill the screen
            Size: Fit screen (as big as the screen allows), or Whole multiples (every game
            pixel the same size; leaves a border)
@@ -280,6 +299,38 @@ Language   English patch or Japanese original (each is its own disc; see below)
 Options are kept in %APPDATA%\RondoRecomp\RondoRecomp\settings.ini (on Linux in
 ~/.local/share/RondoRecomp/RondoRecomp/settings.ini), or in the user folder in portable
 mode (see Portable mode below).
+
+Widescreen (16:9)
+-----------------
+Off by default: the game is its original 4:3 picture. On a 16:9 screen, Video > Widescreen
+16:9 draws more of the level on both sides: the background, enemies, items and weather
+(Stage 2's rain falls across the whole picture), with the score display moved to the left
+edge. It fills a 16:9 screen with Aspect ratio 4:3 (TV) or square pixels (42 or 64 game
+pixels more a side). Enemies and scenery objects come on further past the original screen
+than the game's 64 pixels (92 with 4:3 TV pixels, 114 with square pixels), so even wide ones
+come in from out of sight; enemies walking in from there reach you a moment later.
+Ultrawide screens show the 16:9 picture with the sides beside it.
+Rooms the camera does not scroll through sideways (vertical shafts, boss rooms) keep the
+4:3 picture, as do cinematics and menus. At a level's start or end (where the camera stops
+at the level's wall), Video > Level ends: Picture moves over (the default) puts all the
+extra width on the side the level goes on, so there is no black past the wall: the
+picture stays put until Richter has walked far enough for the camera to scroll, and
+enemies on that side come on and start moving further out, out of sight. Black shows
+the picture centred with black past the wall. Video > Wide menus (on by default) draws
+the file select menus wide as well, their wavy background carried on to the sides (a
+page sliding over passes behind them); screens whose picture does not repeat (the title
+screen, story scenes) stay 4:3, except the title screen and the stage map: with Video >
+Title art (on by default) they are widened with clouds built into the game, holding only the
+sides, as the game's own colour numbers, and the screen's tile layout to recognise it by:
+none of the game's picture. They appear with the screen from its first frame and fade and
+flash with it. Art of your own replaces them: files ending in _sides.png in your profile
+folder (where settings.ini is), such as title_sides.png and map_sides.png, made by a
+converter from art generated around the screen. Where the
+picture goes from 4:3 to wide (the Prologue after its story scene, a scrolling room after a
+vertical one) it grows out to the sides over a moment. Turning it on takes effect from the
+next room. Widescreen is off in RetroAchievements' hardcore mode. The game was not made for
+it, so a glitch at the edges here and there is possible; turn it off if something looks
+wrong.
 
 Your own icon (Windows)
 -----------------------

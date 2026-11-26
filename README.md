@@ -8,6 +8,45 @@
 
 Static recompilation of *Castlevania: Rondo of Blood* (PC Engine Super CD-ROM²) into a native PC application.
 
+## Widescreen 16:9 (experimental)
+
+Video > Widescreen (experimental) holds the widescreen options, each with a help line at the
+bottom of the menu.
+
+- **Widescreen** (off by default): shows more of the level on each side, 42 game pixels a
+  side with the TV's 4:3 pixels and 64 with square pixels (stretched the last 4% or so to fill
+  16:9). Background, enemies, items and Stage 2's rain fill the wider picture; the HUD and a
+  boss's health bar stay at the screen's edges; scenery the game drew only as wide as the 4:3
+  screen is carried on (Stage 2's bridge). Off in RetroAchievements hardcore mode.
+- **Level ends** (on by default): at the start or end of a level, the extra width goes to the
+  side the level continues on, so there's no black past the level's wall.
+- **Spawn distance** (Far by default): Far brings enemies and items to life further out, so
+  they enter the wider picture from beyond it; Near makes them where the 4:3 game does.
+- **Room sides** (on by default): rooms that keep the 4:3 picture (boss rooms, shafts) show the
+  room mirrored at each side, fading to black, instead of black bars.
+- **Open arenas** (on by default): boss rooms that lock the camera to one screen but have no
+  wall at their sides are played across the whole 16:9 picture, Richter free to walk to its
+  edges. So far: Stage 3's giant three-eyed skull.
+- **Wide menus** (on by default): the file select menus and the continue screen go
+  widescreen too, their backgrounds carried on to the sides.
+- **Title art** (on by default): the title screen and the stage map widened with clouds of
+  their own, built in (the art holds only the sides, as colour numbers: none of the game's
+  picture). A `title_sides.png` or `map_sides.png` of your own in the profile folder is used
+  instead.
+
+What widescreen also takes care of:
+
+- A boss that locks the camera mid-level keeps the wide picture.
+- Doors: the next area shows beside the door as you go through; the room you leave stays
+  whole on the other side; the door you came through stays in place in the next room (at its
+  height, up stairs too); a next room with graphics of its own shows black past its wall
+  instead of the old room's leftovers.
+- Enemies sent in from just past the screen's edges come from beyond the wider picture's
+  edges, never popping in inside it.
+- Background objects (the figure on Stage 2's boss tower) stay where the game puts them.
+- GAME OVER: the frozen level and the continue screen are both 16:9.
+- Weapons hit enemies anywhere in the wider picture.
+
 ## Supported Platforms
 
 Currently Windows, Linux x86 (Steam Deck).
@@ -48,6 +87,7 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Sail sway (Video > Graphic enhancements, off by default): the purple sails on Stage 5's docks move in the wind, the long ones swaying, the short ones fluttering; on Stage 5's ship the grey sails move too, in a style picked at random each visit (only the picture changes)
 - All effects (at the top of Video > Graphic enhancements): turns every graphic enhancement on or off at once
 - Night sky (Video > Graphic enhancements, off by default): the stars over Stage 5's docks twinkle faintly, and about once a minute a small shooting star crosses the sky (only the picture changes)
+- 16:9 widescreen, with level ends and menus filled in rather than black, and your own art beside the title and stage map
 - Save stating
 - Cheats
 - A pause menu on the game's own pause screen (RUN / START): CONTINUE, SAVE & END (saves your progress without using a continue) and, with Maria unlocked, PLAYER CHANGE, in the game's own letters and heart cursor read from your disc
@@ -84,7 +124,10 @@ Findings so far: [docs/findings.md](docs/findings.md).
 - A gothic start screen (a candlelit town at night under a pale moon) and menus in arched
   gold-and-umber frames with blackletter titles, with controller, keyboard and mouse.
 - An in-game menu (F1 / Back): video modes for 4K, 16:9 and ultrawide screens (4:3 with
-  blurred sides, square pixels, stretch, integer scaling, sharp filtering), cinematic
+  blurred sides, square pixels, stretch, integer scaling, sharp filtering), a 16:9 widescreen
+  option (off by default) that shows more of the level on each side (with the picture moving
+  over at level ends and the file select menus wide too),
+  cinematic
   skipping, cheats (infinite health, hearts, lives), modern controller layout with
   sub-weapon / Item Crash / backflip buttons, rebindable controls (keys of your own to move, such
   as WASD, alongside the arrows), and a Japanese option (with your Japanese disc).
