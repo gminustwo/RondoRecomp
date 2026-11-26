@@ -664,6 +664,12 @@ menu all render and run; menu input works. `--wav FILE` records the audio output
   raised half a line later than the compare (`pce_run_frame`). Before this, compares stopped
   at the picture's end: the restore never ran, the next frame saved the blue palette, and
   Richter stayed a blue silhouette for the rest of the area.
+- **A blanked screen shows color `$100`, the border color, not the backdrop `$000`.** With
+  the background and sprites both off (VDC CR bits 7 and 6), the picture is `$100`, as in
+  Mednafen (ares shows `$000`). Rondo blanks the screen between rooms and scenes, sets the
+  next one's backdrop while blanked and waits about 7 to 13 frames before turning the picture
+  back on: with `$000` that showed as a red flash at Stage 0's doors and a purple one after
+  the intro's coffin scene (#20).
 - Rondo never uses the timer: its timer handler is a bare `RTI`. The System Card leaves the
   timer stopped after reset (checked by running the original reset code with `--bios-reset`).
 - Input arrives through the System Card's `EX_JOYSNS` variables (`$2228` held, `$222D` newly
