@@ -5,7 +5,8 @@
  * Work RAM ($F8 bank, $2000-$3FFF in the game's address space), found by watching the
  * game run (see docs/findings.md, "Game state"):
  *   $30  main state: 02 opening, 03 title, 04 save menu, 05 playing, 06 area change,
- *        0A story cinematic (e.g. before Stage 0; RUN does not skip it)
+ *        09 story scene with voiced pictures (after Stage 5's Death: Shaft and Annette),
+ *        0A story cinematic (e.g. before Stage 0; RUN skips neither)
  *   $8D  lives (BCD)      $94  hearts (BCD)      $98  health (92 = full bar)
  *   $9F  character: 0 Richter, 1 Maria (each stage loads that character's code)
  *   $81  the stage's step: bits 0-5 the stage (game_stage), bit 7 its second area, bit 6
@@ -41,6 +42,7 @@ enum {
     RONDO_SAVE_MENU = 0x04,
     RONDO_PLAYING = 0x05,
     RONDO_AREA_CHANGE = 0x06,
+    RONDO_SCENE = 0x09,        /* a story scene of voiced pictures (after Death) */
     RONDO_CINEMATIC = 0x0A,
 };
 
@@ -68,7 +70,11 @@ typedef struct GameWatch {
 } GameWatch;
 
 static inline uint8_t game_state(const Pce *p) { return p->wram[RONDO_STATE]; }
-static inline bool game_in_cinematic(const Pce *p) { return game_state(p) == RONDO_CINEMATIC; }
+/* (both kinds of story scene: Skip cinematics runs either fast) */
+static inline bool game_in_cinematic(const Pce *p)
+{
+    return game_state(p) == RONDO_CINEMATIC || game_state(p) == RONDO_SCENE;
+}
 /* The power-on intro: the story narration and the animated opening (state $02, sub-states
  * $00-$01, about 1:55 on both discs). The game ignores START until the title screen
  * (sub-state $02); later returns to the title skip it ($00 -> $02/$03). */
