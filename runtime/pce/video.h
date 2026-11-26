@@ -75,4 +75,11 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line);
  *   from now on; 0 = none. They still count toward each line's 16 and sprite 0's
  *   collision, as if drawn: only their pixels are not put in the picture. */
 const uint16_t *vdc_row_scroll(void);
+/* Sprite pixels (host-side, like the above): 1 where the last picture shows a sprite's pixel
+ * (in front of the background, or over its colour 0), PCE_FB_MAX_W a row (graphic
+ * enhancements: telling the background's scenery from sprites drawn over it). */
+const uint8_t *vdc_sprite_pixels(void);
+/* ... and what is behind the background at each pixel: the colour of a sprite it hides there,
+ * else the background colour (what would show if the background's pixel were taken away). */
+const uint32_t *vdc_behind_pixels(void);
 void vdc_set_sprite_hide(uint64_t mask);

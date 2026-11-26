@@ -36,7 +36,7 @@ typedef struct Menu {
     bool open;
     int page;
     int root;              /* the page Back returns to: the in-game menu or the start screen */
-    int sel[8];
+    int sel[16];           /* the selected row of each page (menu.c checks PAGE_COUNT fits) */
     char status[160];      /* one line at the bottom (e.g. "State 3 saved") */
     char info[2][96];      /* start screen: lines under the title (the disc, the languages) */
     Uint64 opened_ms;      /* when it opened: the panel opens out */

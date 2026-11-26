@@ -54,6 +54,13 @@ void settings_load(Settings *s, const char *path)
         else if (!strcmp(key, "screen_effect")) s->effect = clampi(n, 0, EFFECT_COUNT - 1);
         else if (!strcmp(key, "effect_strength")) s->effect_strength = clampi(n, 0, STRENGTH_COUNT - 1);
         else if (!strcmp(key, "sides")) s->sides = clampi(n, 0, SIDES_COUNT - 1);
+        else if (!strcmp(key, "torch_glow")) s->torch_glow = n != 0;
+        else if (!strcmp(key, "candle_glow")) s->candle_glow = n != 0;
+        else if (!strcmp(key, "alcove_glow")) s->alcove_glow = n != 0;
+        else if (!strcmp(key, "moon_glow")) s->moon_glow = n != 0;
+        else if (!strcmp(key, "shield_shine")) s->shield_shine = n != 0;
+        else if (!strcmp(key, "sail_sway")) s->sail_sway = n != 0;
+        else if (!strcmp(key, "night_sky")) s->night_sky = n != 0;
         else if (!strcmp(key, "skip_cinematics")) s->skip = clampi(n, 0, SKIP_COUNT - 1);
         else if (!strcmp(key, "rewind")) s->rewind = n != 0;
         else if (!strcmp(key, "volume")) s->volume = clampi(n, 0, 10);
@@ -97,13 +104,13 @@ bool settings_save(const Settings *s, const char *path)
     fprintf(f,
             "# Rondo Recomp options (also changed from the in-game menu: F1 / Back)\n"
             "fullscreen = %d\nvsync = %d\naspect = %d\nscaling = %d\nfilter = %d\nscreen_effect = %d\n"
-            "effect_strength = %d\nsides = %d\n"
+            "effect_strength = %d\nsides = %d\ntorch_glow = %d\ncandle_glow = %d\nalcove_glow = %d\nmoon_glow = %d\nshield_shine = %d\nsail_sway = %d\nnight_sky = %d\n"
             "skip_cinematics = %d\nrewind = %d\nvolume = %d\nslot = %d\nstart_screen = %d\n"
             "eight_way = %d\nlimp_whip = %d\nreduce_slowdown = %d\nsticky_stairs = %d\nrun = %d\ndiscord_status = %d\n"
             "cheat_health = %d\ncheat_hearts = %d\ncheat_lives = %d\n"
             "maria_unlocked = %d\nplay_maria = %d\n"
             "language = %d\ndisc_ja = %s\ndisc_en = %s\n",
-            s->fullscreen, s->vsync, s->aspect, s->scaling, s->filter, s->effect, s->effect_strength, s->sides,
+            s->fullscreen, s->vsync, s->aspect, s->scaling, s->filter, s->effect, s->effect_strength, s->sides, s->torch_glow, s->candle_glow, s->alcove_glow, s->moon_glow, s->shield_shine, s->sail_sway, s->night_sky,
             s->skip, s->rewind, s->volume, s->slot, s->start_screen,
             s->eight_way, s->limp_whip, s->reduce_slowdown, s->sticky_stairs, s->run, s->discord,
             s->cheat_health, s->cheat_hearts, s->cheat_lives,

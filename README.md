@@ -40,6 +40,14 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Rewinding up to 30 min that works like the Konami Castlevania collections
 - Compatible with the original PC Engine version, English patched, Wii, and Wii U versions
 - Full suite of video options including filters and screen effects
+- Torch glow (Video > Graphic enhancements, off by default): the wall torches light the bricks round them, their light flickering (Stage 3's dungeon torches; only the picture changes)
+- Candle glow (Video > Graphic enhancements, off by default): the blue-flamed candles get a soft, flickering blue halo (only the picture changes)
+- Alcove glow (Video > Graphic enhancements, off by default): torches in the castle halls' painted alcoves, even half behind the wall, make the alcove's red bricks flicker with their light (only the picture changes)
+- Moon glow (Video > Graphic enhancements, off by default): a faint rim of light round the moon on Stage 5's docks (only the picture changes)
+- Shield shine (Video > Graphic enhancements, off by default): now and then (3 to 7 s apart) a glint of light runs round the rim of one of the heraldic shields on Stage 5's docks, picked at random, sometimes two (only the picture changes)
+- Sail sway (Video > Graphic enhancements, off by default): the purple sails on Stage 5's docks move in the wind, the long ones swaying, the short ones fluttering; on Stage 5's ship the grey sails move too, in a style picked at random each visit (only the picture changes)
+- All effects (at the top of Video > Graphic enhancements): turns every graphic enhancement on or off at once
+- Night sky (Video > Graphic enhancements, off by default): the stars over Stage 5's docks twinkle faintly, and about once a minute a small shooting star crosses the sky (only the picture changes)
 - Save stating
 - Cheats
 - A pause menu on the game's own pause screen (RUN / START): CONTINUE, SAVE & END (saves your progress without using a continue) and, with Maria unlocked, PLAYER CHANGE, in the game's own letters and heart cursor read from your disc

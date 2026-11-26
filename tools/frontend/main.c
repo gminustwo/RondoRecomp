@@ -40,6 +40,7 @@
 #include "fit.h"
 #include "moves.h"
 #include "pausemenu.h"
+#include "torchglow.h"
 #include "prompt.h"
 #include "programs.h"
 #include "update.h"
@@ -1362,8 +1363,38 @@ int main(int argc, char **argv)
             }
         }
 
-        /* video */
-        video_upload(&video, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+        /* video (Video > Improvements > Torch glow, Candle glow, Alcove glow, Moon glow, Shield shine, Sail sway, Night sky: torchglow.h, only the picture, kept in
+         * hardcore; worked out once a game frame) */
+        {
+            const uint32_t *fb = pce.vdc.fb;
+            if ((set.torch_glow || set.candle_glow || set.alcove_glow || set.moon_glow || set.shield_shine || set.sail_sway || set.night_sky) && !test_mode) {
+                static uint32_t tg[PCE_FB_MAX_W * PCE_FB_MAX_H];
+                static uint64_t tg_frame = UINT64_MAX;
+                static int tg_n;
+                if (ran_frame || tg_frame != (uint64_t)pce.frame) {
+                    int cam = (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08];
+                    for (int y = 0; y < pce.vdc.fb_h; y++)
+                        memcpy(&tg[y * PCE_FB_MAX_W], &pce.vdc.fb[y * PCE_FB_MAX_W], (size_t)pce.vdc.fb_w * sizeof *tg);
+                    tg_n = 0;
+                    /* (alcoves first: Torch glow changes the colours they are found by) */
+                    if (set.sail_sway) tg_n += sail_sway(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, cam);
+                    if (set.sail_sway && pce.wram[0xA2] == 0x32)   /* (Stage 5's ship: its grey sails) */
+                        tg_n += rigging_sway(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, cam,
+                                             pce.wram[0x1E8E] << 8 | pce.wram[0x1E20], vdc_sprite_pixels(), vdc_behind_pixels());
+                    if (set.night_sky) tg_n += night_sky(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);
+                    /* (the docks' only, area $26/$27: a castle pillar's base is in the shields' rim
+                     * colours, and a glint ran round it) */
+                    if (set.shield_shine && (pce.wram[0xA2] & 0xFE) == 0x26) tg_n += shield_shine(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);
+                    if (set.moon_glow) tg_n += moon_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);
+                    if (set.alcove_glow) tg_n += alcove_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, cam, set.torch_glow);
+                    if (set.torch_glow) tg_n += torch_glow(tg, tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, cam);
+                    if (set.candle_glow) tg_n += candle_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, cam);
+                    tg_frame = (uint64_t)pce.frame;
+                }
+                if (tg_n) fb = tg;
+            }
+            video_upload(&video, fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W);
+        }
         if (features_dir && !t_shots && pce.frame >= 17880) {
             /* screenshots: 16:9 window with each picture mode and screen effect, then the menu
              * pages */

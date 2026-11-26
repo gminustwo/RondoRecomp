@@ -13,6 +13,7 @@
 #include "../frontend/game.h"
 #include "../frontend/moves.h"
 #include "../frontend/pausemenu.h"
+#include "../frontend/torchglow.h"
 #include "../frontend/prompt.h"
 #include "recomp/recomp.h"
 #include "../recomp/capture_script.h"
@@ -211,6 +212,8 @@ int main(int argc, char **argv)
     long rows_from = -1, rows_to = -1;   /* --row-scroll A:B: each frame's bands of rows by X scroll */
     long sat_at[8]; /* --dump-sat FRAME: print the sprite table after that frame */
     int n_sat = 0;
+    bool torch_shots = false, candle_shots = false, alcove_shots = false, moon_shots = false, shield_shots = false;
+    bool sail_shots = false, night_shots = false;
     for (int i = 2; i < argc; i++) {
         if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shot-every") && i + 1 < argc) shot_every = atol(argv[++i]);
@@ -290,6 +293,15 @@ int main(int argc, char **argv)
             if (sscanf(argv[++i], "%ld:%ld", &run_at[n_run][0], &run_at[n_run][1]) == 2) n_run++;
         }
         else if (!strcmp(argv[i], "--row-scroll") && i + 1 < argc) sscanf(argv[++i], "%ld:%ld", &rows_from, &rows_to);
+        else if (!strcmp(argv[i], "--torch-glow")) torch_shots = true;   /* screenshots with Torch glow */
+        else if (!strcmp(argv[i], "--candle-glow")) candle_shots = true;   /* ... and Candle glow */
+        else if (!strcmp(argv[i], "--alcove-glow")) alcove_shots = true;   /* ... and Alcove glow */
+        else if (!strcmp(argv[i], "--moon-glow")) moon_shots = true;   /* ... and Moon glow */
+        else if (!strcmp(argv[i], "--shield-shine")) shield_shots = true;   /* ... and Shield shine */
+        else if (!strcmp(argv[i], "--sail-sway")) sail_shots = true;   /* ... and Sail sway */
+        else if (!strcmp(argv[i], "--sail-style") && i + 1 < argc) rigging_sway_style(atoi(argv[++i]));   /* the ship's sails: that style */
+        else if (!strcmp(argv[i], "--night-sky")) night_shots = true;   /* ... and Night sky */
+        else if (!strcmp(argv[i], "--night-sky-streak") && i + 1 < argc) night_sky_streak_at(atoi(argv[++i]));   /* a shooting star from that frame */
         else if (!strcmp(argv[i], "--dump-sat") && i + 1 < argc && n_sat < 8) sat_at[n_sat++] = atol(argv[++i]);
         else if (!strcmp(argv[i], "--vram-watch") && i + 1 < argc) {
             if (sscanf(argv[++i], "%x:%x", &vw_lo, &vw_hi) == 2) vw_count = calloc(1u << 24, sizeof *vw_count);
@@ -508,7 +520,39 @@ int main(int argc, char **argv)
         if ((shot_every > 0 && (f + 1) % shot_every == 0) || f + 1 == start_frame + frames) {
             char path[512];
             snprintf(path, sizeof path, "%s/frame_%05ld.png", out, f + 1);
-            if (!png_write_argb(path, pce.vdc.fb, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W))
+            const uint32_t *shot = pce.vdc.fb;
+            static uint32_t tg[PCE_FB_MAX_W * PCE_FB_MAX_H];
+            if (moon_shots || shield_shots || sail_shots || night_shots) {
+                if (shot != tg)
+                    for (int y = 0; y < pce.vdc.fb_h; y++)
+                        memcpy(&tg[y * PCE_FB_MAX_W], &shot[y * PCE_FB_MAX_W], (size_t)pce.vdc.fb_w * sizeof *tg);
+                if (sail_shots) sail_sway(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08]);
+                if (sail_shots && pce.wram[0xA2] == 0x32)
+                    rigging_sway(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08],
+                                 pce.wram[0x1E8E] << 8 | pce.wram[0x1E20], vdc_sprite_pixels(), vdc_behind_pixels());
+                if (night_shots) night_sky(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);
+                if (shield_shots && (pce.wram[0xA2] & 0xFE) == 0x26) shield_shine(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);   /* (the docks only, as in the game) */
+                if (moon_shots) moon_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame);
+                shot = tg;
+            }
+            if (alcove_shots) {
+                if (shot != tg)
+                for (int y = 0; y < pce.vdc.fb_h; y++)
+                    memcpy(&tg[y * PCE_FB_MAX_W], &shot[y * PCE_FB_MAX_W], (size_t)pce.vdc.fb_w * sizeof *tg);
+                alcove_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08], false);
+                shot = tg;
+            }
+            if (torch_shots && torch_glow(shot, tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame,
+                                          (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08]))
+                shot = tg;
+            if (candle_shots) {
+                if (shot != tg)
+                    for (int y = 0; y < pce.vdc.fb_h; y++)
+                        memcpy(&tg[y * PCE_FB_MAX_W], &shot[y * PCE_FB_MAX_W], (size_t)pce.vdc.fb_w * sizeof *tg);
+                candle_glow(tg, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W, pce.frame, (pce.wram[0x1E96] & 0x0F) << 8 | pce.wram[0x1E08]);
+                shot = tg;
+            }
+            if (!png_write_argb(path, shot, pce.vdc.fb_w, pce.vdc.fb_h, PCE_FB_MAX_W))
                 fprintf(stderr, "cannot write %s (does the directory exist?)\n", path);
             HuC6280 *c = &pce.cpu;
             printf("frame %5ld  PC=%02X:%04X  CR=%04X MWR=%04X SATB=%04X  %dx%d  irq_m=%02X  vec1=%02X%02X  io?=%u\n",

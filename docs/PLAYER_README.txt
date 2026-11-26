@@ -223,6 +223,23 @@ Video      Fullscreen (uses the screen's own resolution, e.g. 4K)
            soft TV picture); Effect strength: Light, Medium or Strong
            Beside the picture: when the picture is narrower than the screen, a blurred
            copy of it, or black
+           Graphic enhancements: a page of graphics touch-ups (only the picture changes):
+             All effects: On turns every one below on, Off turns them all off
+             Torch glow: Off (the default) or on: the wall torches (Stage 3's dungeon)
+             light the bricks round them, their light flickering
+             Candle glow: Off (the default) or on: the blue-flamed candles get a
+             soft, flickering blue halo
+             Alcove glow: Off (the default) or on: torches in the castle halls' lit
+             alcoves make the alcove's red bricks flicker with their light
+             Moon glow: Off (the default) or on: a faint rim of light round the moon
+             Shield shine: Off (the default) or on: now and then a glint runs round the rim of
+             one of the heraldic shields, picked at random (sometimes two)
+             Sail sway: Off (the default) or on: the purple sails over the docks
+             move in the wind, the long ones swaying, the short ones fluttering; on
+             Stage 5's ship the grey sails move too, in a style picked at random each
+             time you get there
+             Night sky: Off (the default) or on: the stars over the docks twinkle
+             faintly, and once in a while a small shooting star crosses the sky
 Gameplay   Skip cinematics: Press START, Automatically, or Never. During the logo and
            the intro (the story narration and opening before the title screen), START, A
            or X goes straight to the title screen, the way the game itself allows once it

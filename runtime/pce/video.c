@@ -220,6 +220,10 @@ void vdc_vblank(Vdc *d)
 
 static uint16_t row_scroll[PCE_FB_MAX_H];
 const uint16_t *vdc_row_scroll(void) { return row_scroll; }
+static uint8_t sprite_px[PCE_FB_MAX_W * PCE_FB_MAX_H];
+const uint8_t *vdc_sprite_pixels(void) { return sprite_px; }
+static uint32_t behind_px[PCE_FB_MAX_W * PCE_FB_MAX_H];
+const uint32_t *vdc_behind_pixels(void) { return behind_px; }
 static uint64_t sprite_hide;
 void vdc_set_sprite_hide(uint64_t mask) { sprite_hide = mask; }
 
@@ -317,9 +321,14 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
     if (cr & 0x40) render_sprites(d, row, w, sp);
 
     uint32_t *dst = &d->fb[row * PCE_FB_MAX_W];
+    uint8_t *spx = &sprite_px[row * PCE_FB_MAX_W];
+    uint32_t *bhx = &behind_px[row * PCE_FB_MAX_W];
     for (int x = 0; x < w; x++) {
         uint16_t s = sp[x];
-        if (s && ((s & 0x8000) || !bg[x])) dst[x] = vce->argb[s & 0x1FF];
+        spx[x] = s && ((s & 0x8000) || !bg[x]);
+        /* (behind: a sprite's pixel the background hides, else the background colour) */
+        bhx[x] = s && !spx[x] ? vce->argb[s & 0x1FF] : vce->argb[0];
+        if (spx[x]) dst[x] = vce->argb[s & 0x1FF];
         else if (bg[x]) dst[x] = vce->argb[bg[x]];
         else dst[x] = vce->argb[0];
     }

@@ -24,6 +24,13 @@ typedef struct Settings {
     int effect;            /* EFFECT_*: scanlines, a CRT (flat or curved), composite */
     int effect_strength;   /* STRENGTH_* */
     int sides;             /* SIDES_*: what fills a wide screen beside the picture */
+    bool night_sky;        /* stars twinkle, a rare shooting star (torchglow.h; off by default) */
+    bool sail_sway;        /* the docks' purple sails (Stage 5) move in the wind (torchglow.h; off by default) */
+    bool shield_shine;     /* a glint runs round the heraldic shields' rims (torchglow.h; off by default) */
+    bool moon_glow;        /* a faint rim of light round the moon (torchglow.h; off by default) */
+    bool alcove_glow;      /* torches in painted alcoves light the alcove's red bricks (torchglow.h; off by default) */
+    bool candle_glow;      /* blue candles get a soft flickering halo (torchglow.h; off by default) */
+    bool torch_glow;       /* wall torches light the wall round them, flickering (torchglow.h; off by default) */
     /* gameplay */
     int skip;              /* SKIP_*: story cinematics */
     bool rewind;
