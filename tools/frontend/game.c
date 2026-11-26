@@ -121,3 +121,37 @@ void game_apply_run(Pce *p, bool held, GameWatch *w)
     if (w->run_from == walk && mag == run_speed(walk) && ram[RONDO_PLAYER_ANIM_TIMER] > 1 && p->frame % 6)
         ram[RONDO_PLAYER_ANIM_TIMER]--;
 }
+
+/* The game's save file: "DRACULA X", 0x90 bytes, two players' records 0x30 apart ($27 is the
+ * one in use, bit 7: none). A record: 00 the unlocks byte ($1F40), 01-14 the areas visited and
+ * cleared ($1F43-$1F56), 1D-1E the continue count ($1F41-$1F42), 1F-21 the total score (BCD). */
+const char *game_save_progress(Pce *p)
+{
+    static const uint8_t NAME[12] = {0x58, 0x20, 'D', 'R', 'A', 'C', 'U', 'L', 'A', ' ', 'X', ' '};
+    const uint8_t *r = p->wram;
+    if (!game_playing(p) || r[RONDO_SUB] != 0x01) return "Only while playing a stage.";
+    if (r[0x27] & 0x80) return "No save file in use.";
+    uint8_t buf[0x90];
+    int done = 0;
+    if (bram_read(p, NAME, buf, sizeof buf, 0, &done) || done != (int)sizeof buf) return "The game's save file was not found.";
+    int x = r[0x27] ? 0x30 : 0x00;
+    /* the score ($96-$97, BCD) added to the total, 999999 at most */
+    int carry = 0;
+    for (int k = 0; k < 3; k++) {
+        int a = k < 2 ? r[0x96 + k] : 0, b = buf[x + 0x1F + k];
+        int lo = (a & 0x0F) + (b & 0x0F) + carry, hi;
+        carry = lo > 9;
+        if (carry) lo -= 10;
+        hi = (a >> 4) + (b >> 4) + carry;
+        carry = hi > 9;
+        if (carry) hi -= 10;
+        buf[x + 0x1F + k] = (uint8_t)(hi << 4 | lo);
+    }
+    if (carry) buf[x + 0x1F] = buf[x + 0x20] = buf[x + 0x21] = 0x99;
+    buf[x + 0x00] = r[0x1F40];
+    buf[x + 0x1D] = r[0x1F41];
+    buf[x + 0x1E] = r[0x1F42];
+    memcpy(&buf[x + 0x01], &r[0x1F43], 0x14);
+    if (bram_write(p, NAME, buf, sizeof buf, 0)) return "Writing the save file failed.";
+    return NULL;
+}

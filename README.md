@@ -42,6 +42,7 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Full suite of video options including filters and screen effects
 - Save stating
 - Cheats
+- A pause menu on the game's own pause screen (RUN / START): CONTINUE, SAVE & END (saves your progress without using a continue) and, with Maria unlocked, PLAYER CHANGE, in the game's own letters and heart cursor read from your disc
 - Super Castlevania IV moves (Gameplay page): 8-way whipping and dove throwing, and a limp whip, after Pizzano's Super Rondo of Blood hack (RondoRecomp's own version)
 - **Reduce slowdown** (Gameplay page, off by default): busy scenes such as Death's fight, scythes flying and blood splashing, keep full speed: the game's CPU gets half a frame of extra time each frame, the picture and sound waiting meanwhile. Not in RetroAchievements hardcore mode
 - Sticky stairs (Gameplay page, off by default): a jump comes down onto stairs without Up held

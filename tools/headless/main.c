@@ -12,6 +12,7 @@
 #include "pce/state.h"
 #include "../frontend/game.h"
 #include "../frontend/moves.h"
+#include "../frontend/pausemenu.h"
 #include "../frontend/prompt.h"
 #include "recomp/recomp.h"
 #include "../recomp/capture_script.h"
@@ -177,6 +178,8 @@ int main(int argc, char **argv)
     bool no_native = false, use_script = false, mute_cd = false;
     Press presses[64];
     int n_press = 0;
+    bool pause_menu_on = false;
+    static PauseMenu pm;
     struct { long from, to, period; int len; uint8_t mask; } every[16];
     int n_every = 0;
     /* investigation helpers: WRAM watch, pokes, save states, WRAM dumps */
@@ -272,6 +275,7 @@ int main(int argc, char **argv)
             move_opts.limp_whip = strstr(c, "limp") != NULL;
             move_opts.stair_catch = strstr(c, "stairs") != NULL;
         }
+        else if (!strcmp(argv[i], "--pause-menu")) pause_menu_on = true;   /* the in-game pause menu (pausemenu.h) */
         else if (!strcmp(argv[i], "--ram-trace") && i + 1 < argc) ram_trace = fopen(argv[++i], "wb");
         else if (!strcmp(argv[i], "--write-watch") && i + 1 < argc) {
             char tmp[512];
@@ -413,10 +417,19 @@ int main(int argc, char **argv)
             if (f >= poke[i].from && f <= poke[i].to) pce.wram[poke[i].addr] = (uint8_t)poke[i].val;
         if (skip_cine && game_in_cinematic(&pce)) { pce.pad = 0; skipped++; }
         pce.pad = moves_pad(&moves, &pce, &move_opts, pce.pad, pce.pad & PAD_II);
+        if (pause_menu_on) pce.pad = pause_menu_pad(&pm, &pce, pce.pad, true);
         if (prompt_dev >= 0) prompt_before_frame(&tp, &pce);
         moves_before_frame(&moves, &pce, &move_opts, true);
         pce_run_frame(&pce);
         if (prompt_dev >= 0) prompt_after_frame(&tp, &pce);
+        if (pause_menu_on) {
+            if (!pause_menu_draw(&pm, &pce)) printf("pause menu: the game's letters not found on the disc\n");
+            if (pm.want_exit) {
+                pm.want_exit = false;
+                const char *why = game_save_progress(&pce);
+                printf("pause menu: SAVE & END at frame %ld: %s\n", f, why ? why : "saved");
+            }
+        }
         moves_after_frame(&moves, &pce, &move_opts, true);
         game_apply_cheats(&pce, &cheats, &gw);
         {

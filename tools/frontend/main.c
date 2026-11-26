@@ -39,6 +39,7 @@
 #include "video.h"
 #include "fit.h"
 #include "moves.h"
+#include "pausemenu.h"
 #include "prompt.h"
 #include "programs.h"
 #include "update.h"
@@ -62,6 +63,11 @@ static void show_osd(const char *fmt, ...)
 
 /* A one-line notice on a plaque with pointed ends (theme.h): top center (clear of the HUD
  * on the left), or bottom right. */
+/* the CONTINUE / SAVE & END / PLAYER CHANGE menu on the game's own pause screen
+ * (pausemenu.h); SAVE & END is carried out at the top of the main loop */
+static PauseMenu pause_menu;
+static bool pause_font_ok = true;
+
 static void draw_banner(SDL_Renderer *ren, const char *text, bool bottom_right)
 {
     int ww, wh;
@@ -933,6 +939,25 @@ int main(int argc, char **argv)
                 SDL_PushEvent(&click);
             }
         }
+        /* SAVE & END chosen on the game's pause screen (pausemenu.h) */
+        if (pause_menu.want_exit) {
+            pause_menu.want_exit = false;
+            char perr[256];
+            const char *why = game_save_progress(&pce);
+            if (why) {
+                show_osd("%s", why);
+            } else {
+                flush_bram(&ss);
+                if (start_game(&ss, ss.disc, perr, sizeof perr)) {
+                    menu_open_start_screen(&menu);
+                    start_screen_info(&menu, &ss, &set, disc_path);
+                    skipping = was_rewinding = skip_to_title = false;
+                    show_osd("Game saved");
+                } else {
+                    show_osd("%.100s", perr);
+                }
+            }
+        }
         bool start_pressed = false, skip_pressed = false;
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -1301,8 +1326,10 @@ int main(int argc, char **argv)
                 if (press_start)                   /* the game's own skip: a new START every 8 frames */
                     pad = game_power_on_skippable(&pce) && (pce.frame & 7) < 4 ? PAD_RUN : 0;
                 pad = moves_pad(&moves, &pce, &move_opts, pad, !test_mode && !hold_input && input_attack_held(&in));
+                pad = pause_menu_pad(&pause_menu, &pce, pad, !test_mode && !features_dir);
                 pce.pad = pad;
                 run_frame();
+                pause_font_ok = pause_menu_draw(&pause_menu, &pce);
                 game_apply_cheats(&pce, &cheats, &gw);
                 game_apply_run(&pce, set.run && !test_mode && !hardcore && input_run_held(&in), &gw);
                 ach_frame();
@@ -1572,6 +1599,8 @@ int main(int argc, char **argv)
         } else if (SDL_GetTicks() < osd_until) {
             draw_banner(ren, osd_text, false);
         }
+        if (pause_menu.active && !pause_font_ok && !menu.open)   /* (the game's letters not found on the disc) */
+            draw_banner(ren, pause_menu.sel == 0 ? "> CONTINUE" : pause_menu.sel == 1 ? "> SAVE & END" : "> PLAYER CHANGE", true);
         if (!menu.open && !skipping && set.skip == SKIP_START &&
             (game_in_cinematic(&pce) || game_power_on_skippable(&pce))) {
             char skip_line[64];

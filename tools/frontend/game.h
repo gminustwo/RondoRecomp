@@ -108,6 +108,12 @@ static inline bool game_playing(const Pce *p) { return game_state(p) == RONDO_PL
  * Stage n, step 2n + 1 Stage n', step $10 the final stage. False outside a stage. */
 bool game_stage(const Pce *p, char *out, int cap);
 
+/* Save the game's progress to its backup RAM file as its own GAME OVER > SAVE & END does
+ * (69:53E1: the score added to the file's total, the progress record $1F40-$1F56 copied in,
+ * written back through the System Card's file routines), without the continue it counts.
+ * NULL when saved, else why not (not in a stage, no save file in use, no file). */
+const char *game_save_progress(Pce *p);
+
 void game_watch_reset(GameWatch *w, const Pce *p);
 /* Call after every emulated frame. */
 void game_apply_cheats(Pce *p, const GameCheats *c, GameWatch *w);
