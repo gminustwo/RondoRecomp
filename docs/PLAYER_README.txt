@@ -245,17 +245,17 @@ Video      Fullscreen (uses the screen's own resolution, e.g. 4K)
            Graphic enhancements: a page of graphics touch-ups (only the picture changes):
              All effects: On turns every one below on, Off turns them all off
              Torch glow: Off (the default) or on: the wall torches (Stage 3's dungeon)
-             light the bricks round them, their light flickering
+             light the bricks around them, their light flickering
              Candle glow: Off (the default) or on: the blue-flamed candles get a
              soft, flickering blue halo
              Alcove glow: Off (the default) or on: torches in the castle halls' lit
              alcoves make the alcove's red bricks flicker with their light
-             Moon glow: Off (the default) or on: a faint rim of light round the moon
-             Shield shine: Off (the default) or on: now and then a glint runs round the rim of
+             Moon glow: Off (the default) or on: a faint rim of light around the moon
+             Shield shine: Off (the default) or on: now and then a glint runs around the rim of
              one of the heraldic shields, picked at random (sometimes two)
              Sail sway: Off (the default) or on: the purple sails over the docks
              move in the wind, the long ones swaying, the short ones fluttering; on
-             Stage 5's ship the grey sails move too, in a style picked at random each
+             Stage 5's ship the gray sails move too, in a style picked at random each
              time you get there
              Night sky: Off (the default) or on: the stars over the docks twinkle
              faintly, and once in a while a small shooting star crosses the sky
@@ -316,12 +316,12 @@ at the level's wall), Video > Level ends: Picture moves over (the default) puts 
 extra width on the side the level goes on, so there is no black past the wall: the
 picture stays put until Richter has walked far enough for the camera to scroll, and
 enemies on that side come on and start moving further out, out of sight. Black shows
-the picture centred with black past the wall. Video > Wide menus (on by default) draws
+the picture centered with black past the wall. Video > Wide menus (on by default) draws
 the file select menus wide as well, their wavy background carried on to the sides (a
 page sliding over passes behind them); screens whose picture does not repeat (the title
 screen, story scenes) stay 4:3, except the title screen and the stage map: with Video >
 Title art (on by default) they are widened with clouds built into the game, holding only the
-sides, as the game's own colour numbers, and the screen's tile layout to recognise it by:
+sides, as the game's own color numbers, and the screen's tile layout to recognize it by:
 none of the game's picture. They appear with the screen from its first frame and fade and
 flash with it. Art of your own replaces them: files ending in _sides.png in your profile
 folder (where settings.ini is), such as title_sides.png and map_sides.png, made by a
