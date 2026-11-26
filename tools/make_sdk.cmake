@@ -8,10 +8,11 @@
 #   sdk/include/SDL3/        SDL3 headers
 #   sdk/lib/libSDL3.dll.a    SDL3 import library (Windows)
 #   sdk/lib/libSDL3.so.0     SDL3 itself (Linux): linked against and copied next to rondo
+#   sdk/lib/libSDL3.0.dylib  the same on macOS
 #   sdk/bin/*.dll            DLLs copied next to rondo.exe (Windows)
 #
 # cmake -DSRC=<repo> -DOUT=<sdk dir> -DSDL_INC=<dir containing SDL3/>
-#       -DSDL_LIB=<libSDL3.dll.a | libSDL3.so.0> -DSDL_BIN=<dir with SDL3.dll> -P tools/make_sdk.cmake
+#       -DSDL_LIB=<libSDL3.dll.a | libSDL3.so.0 | libSDL3.0.dylib> -DSDL_BIN=<dir with SDL3.dll> -P tools/make_sdk.cmake
 
 set(RUNTIME_SOURCES
   runtime/cpu/huc6280.c

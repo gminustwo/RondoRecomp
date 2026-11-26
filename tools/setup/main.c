@@ -1,5 +1,5 @@
 /* RondoRecomp Setup (command line): turns the player's own disc image into rondo.exe (Windows)
- * or rondo (Linux).
+ * or rondo (Linux, macOS).
  *
  * usage: rondo_setup <disc.zip | disc.7z | disc.cue | disc.chd | folder | game.wad | WUP folder>
  *                    [--keys FILE] [--out DIR] [--sdk DIR] [--zig ZIG] [--allow-unknown] [--no-build]
@@ -46,6 +46,16 @@
 #define ZIG_PROGRAM "zig/zig.exe"
 #define ZIG_TARGET "x86_64-windows-gnu"
 #define SDL_LINK "libSDL3.dll.a"   /* import library, in sdk/lib */
+#elif defined(__APPLE__)
+#define ZIG_PROGRAM "zig/zig"
+/* Apple silicon, macOS 11 and newer (as SDL3 in the app); zig has macOS's headers and
+ * libSystem with it, so no Xcode is needed */
+#define ZIG_TARGET "aarch64-macos.11.0"
+#define SDL_LINK "libSDL3.0.dylib" /* the library itself, in sdk/lib */
+#include <copyfile.h>
+#include <errno.h>
+#include <sys/xattr.h>
+#include <unistd.h>
 #else
 #define ZIG_PROGRAM "zig/zig"
 /* glibc 2.35 (Ubuntu 22.04, SteamOS 3 and newer): zig links against that version's symbols,
@@ -551,6 +561,10 @@ static bool build(const char *sdk, const char *zig, const char *out, const char 
     link[nl++] = opt_l;
     link[nl++] = "-lwinhttp";                 /* RetroAchievements' server (tools/frontend/http.c) */
     link[nl++] = "-Wl,--subsystem,windows";   /* GUI program: zig cc ignores -mwindows */
+#elif defined(__APPLE__)
+    link[nl++] = opt_l;
+    link[nl++] = "-lm";
+    link[nl++] = "-Wl,-rpath,@executable_path";   /* libSDL3.0.dylib is found next to rondo */
 #else
     link[nl++] = opt_l;
     link[nl++] = "-lm";
@@ -570,6 +584,9 @@ static bool build(const char *sdk, const char *zig, const char *out, const char 
 #ifdef _WIN32
     static const char *dlls[] = {"SDL3.dll", "libiconv-2.dll"};
     const char *dll_dir = "bin";
+#elif defined(__APPLE__)
+    static const char *dlls[] = {"libSDL3.0.dylib"};
+    const char *dll_dir = "lib";
 #else
     static const char *dlls[] = {"libSDL3.so.0"};
     const char *dll_dir = "lib";
@@ -593,6 +610,43 @@ static bool build(const char *sdk, const char *zig, const char *out, const char 
     }
     return true;
 }
+
+#ifdef __APPLE__
+/* macOS quarantines what a browser downloads (each file of the app too, unzipped) and runs a
+ * quarantined program only once the player has allowed it: the app they opened, not zig in
+ * it, which macOS would stop ("Not Opened") with Setup waiting for it. So Setup runs a copy
+ * of zig of its own, DIR/build/zig/zig, without the quarantine: a clone on APFS, which takes
+ * no space; zig's files stay in the app (ZIG_LIB_DIR). Copied again when the app's differs. */
+static bool own_zig(const char *zig, const char *out, char *own, size_t n)
+{
+    char dir[1100], fresh[1200];
+    join(dir, sizeof dir, out, "build/zig");
+    SDL_CreateDirectory(dir);
+    join(own, n, dir, "zig");
+    SDL_PathInfo a, b;
+    if (!SDL_GetPathInfo(zig, &a)) {
+        snprintf(g_err, sizeof g_err, "compiler not found at %s", zig);
+        return false;
+    }
+    if (SDL_GetPathInfo(own, &b) && b.size == a.size && b.modify_time == a.modify_time) {
+        removexattr(own, "com.apple.quarantine", 0);
+        return true;
+    }
+    snprintf(fresh, sizeof fresh, "%s.new", own);
+    unlink(fresh);
+    if (copyfile(zig, fresh, NULL, COPYFILE_CLONE) != 0) {   /* (a plain copy where it cannot clone) */
+        snprintf(g_err, sizeof g_err, "cannot copy %s to %s: %s", zig, fresh, strerror(errno));
+        return false;
+    }
+    removexattr(fresh, "com.apple.quarantine", 0);
+    if (rename(fresh, own) != 0) {
+        snprintf(g_err, sizeof g_err, "cannot make %s: %s", own, strerror(errno));
+        unlink(fresh);
+        return false;
+    }
+    return true;
+}
+#endif
 
 /* ---- languages ------------------------------------------------------------------ */
 
@@ -906,6 +960,13 @@ int setup_main(int argc, char **argv)
                  "again (all of its files, zig\\lib too) into an empty folder and run Setup from there.", std_zig);
         return fail("building");
     }
+#ifdef __APPLE__
+    if (!zig_arg) {
+        char own[1100];
+        if (!own_zig(zig, out, own, sizeof own)) return fail("building");
+        snprintf(zig, sizeof zig, "%s", own);
+    }
+#endif
     if (!build(sdk, zig, out, gen_dir)) return fail("building");
     /* Which version built it: the AppImage rebuilds the game when it is another one. The
      * AppImage's version.txt (its version and a fingerprint of its contents, tools/linux/
@@ -928,6 +989,9 @@ int setup_main(int argc, char **argv)
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);   /* keep progress and errors in order */
+#ifdef __APPLE__
+    rondo_mac_app();   /* in RondoRecomp.app: its folders (programs.h) */
+#endif
     return setup_main(argc, argv);
 }
 #endif

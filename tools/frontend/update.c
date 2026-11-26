@@ -27,6 +27,8 @@ const char *update_user_agent(void)
 {
 #ifdef _WIN32
     return "RondoRecomp/" RONDO_VERSION " (Windows)";
+#elif defined(__APPLE__)
+    return "RondoRecomp/" RONDO_VERSION " (macOS)";
 #else
     return "RondoRecomp/" RONDO_VERSION " (Linux)";
 #endif
@@ -354,9 +356,14 @@ bool update_parse(const char *json, size_t len, UpdateInfo *info, char *err, siz
     notes_from(r.body, info->notes);
     free(r.body);
     if (r.draft || r.prerelease) return true;          /* not one to install */
+#ifdef __APPLE__
+    /* the macOS app: the new app, the whole of it (zipped; it has the compiler inside) */
+    const Asset *a = r.have_full ? &r.full : NULL;
+#else
     /* from the AppImage: the new AppImage, the whole of it (it has the compiler inside) */
     const Asset *a = rondo_appimage() ? (r.have_appimage ? &r.appimage : NULL)
                    : r.have_slim ? &r.slim : r.have_full ? &r.full : NULL;
+#endif
     /* https only, unless the release itself came over plain http (a local test server) */
     if (a && (!strncmp(a->url, "https://", 8) || !strncmp(update_api_url(), "http://", 7))) {
         snprintf(info->asset, sizeof info->asset, "%s", a->name);

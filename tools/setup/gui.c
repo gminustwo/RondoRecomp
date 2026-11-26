@@ -1,5 +1,6 @@
 /* RondoRecomp Setup, windowed: choose your zipped disc image, watch it being turned into
- * rondo.exe (rondo on Linux), then play. Runs the same steps as rondo_setup
+ * rondo.exe (rondo on Linux and macOS), then play. On macOS it is what RondoRecomp.app
+ * starts (mac_app_start). Runs the same steps as rondo_setup
  * (tools/setup/main.c) in a worker thread; text is drawn with SDL3's built-in debug font, so
  * no font files are needed. It also asks GitHub for a newer version (../frontend/update.h)
  * and offers to install it (rondo_setup --update).
@@ -326,6 +327,39 @@ static bool play(void)
     return true;
 }
 
+#ifdef __APPLE__
+/* RondoRecomp.app starts here (tools/mac/Info.plist), and this does what tools/linux/AppRun
+ * does for the AppImage: opened from the Finder, the app starts the game when this version
+ * built it (build/version.txt, as the app's version.txt), else Setup's window, which rebuilds
+ * at once when another version built it (*rebuild). --setup: Setup's window. When the game
+ * starts Setup (programs.h: RONDO_APP is set then), it is Setup's window. */
+static void mac_app_start(int argc, char **argv, bool *rebuild)
+{
+    bool from_ours = rondo_app() != NULL;
+    if (!rondo_mac_app() || from_ours) return;
+    for (int i = 1; i < argc; i++)
+        if (!strcmp(argv[i], "--setup") || !strcmp(argv[i], "--rebuild") || !strcmp(argv[i], "--autotest-play")) return;
+    char game[1100], stamp[1100], mine[1100];
+    snprintf(game, sizeof game, "%s" GAME_PROGRAM, rondo_home_dir());
+    if (access(game, X_OK) != 0) return;
+    snprintf(stamp, sizeof stamp, "%sbuild/version.txt", rondo_home_dir());
+    snprintf(mine, sizeof mine, "%sversion.txt", rondo_tools_dir());
+    char *built = SDL_LoadFile(stamp, NULL), *ours = SDL_LoadFile(mine, NULL);
+    bool same = built && ours && !strcmp(built, ours);
+    SDL_free(built);
+    SDL_free(ours);
+    if (same) {
+        argv[0] = game;   /* the game, with the app's arguments */
+        execv(game, argv);
+        fprintf(stderr, "cannot start %s\n", game);
+        return;
+    }
+    char dir[1100];
+    snprintf(dir, sizeof dir, "%sgame", rondo_home_dir());
+    if (SDL_GetPathInfo(dir, NULL)) *rebuild = true;
+}
+#endif
+
 int main(int argc, char **argv)
 {
     /* --rebuild: start rebuilding at once (the AppImage, when it is newer than the game) */
@@ -340,8 +374,11 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--4:3")) screen_arg = 1;
         if (!strcmp(argv[i], "--wide")) screen_arg = 0;
     }
+#ifdef __APPLE__
+    mac_app_start(argc, argv, &auto_rebuild);
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
-    /* where the game is built: this folder, or the AppImage's own (programs.h) */
+    /* where the game is built: this folder, or the AppImage's or the macOS app's own (programs.h) */
     snprintf(base_dir, sizeof base_dir, "%s", rondo_home_dir());
     SDL_CreateDirectory(base_dir);
     mtx = SDL_CreateMutex();
@@ -399,6 +436,7 @@ int main(int argc, char **argv)
          * the 4:3 layout */
         float off = (float)(layout_h() - 400);
         const char *portable_label = rondo_appimage() ? "Portable: settings and saves next to the AppImage (user)"
+                                     : rondo_app()    ? "Portable: settings and saves with the game (user)"
                                                       : "Portable: settings and saves in this folder (user)";
         Button buttons[8];
         int nb = 0;
@@ -474,10 +512,11 @@ int main(int argc, char **argv)
             SDL_RenderDebugText(ren, 24, line_y(84), "   Unzipped: click \"Disc folder...\" and pick the folder it is in.");
             SDL_RenderDebugText(ren, 24, line_y(96), "   The original Japanese disc or the English translation: either works.");
             SDL_RenderDebugText(ren, 24, line_y(112), "2. Setup checks the disc, extracts it, recompiles the game code");
-            if (rondo_appimage()) {
+            if (rondo_appimage() || rondo_app()) {
                 char where[100];
                 snprintf(where, sizeof where, "   in %.70s", base_dir);
-                SDL_RenderDebugText(ren, 24, line_y(124), "   and builds the game (about a minute; longer on a Steam Deck)");
+                SDL_RenderDebugText(ren, 24, line_y(124), rondo_app() ? "   and builds the game (about a minute)"
+                                                                      : "   and builds the game (about a minute; longer on a Steam Deck)");
                 SDL_RenderDebugText(ren, 24, line_y(136), where);
             } else {
                 SDL_RenderDebugText(ren, 24, line_y(124), "   and builds " GAME_PROGRAM " in this folder. This takes about a minute.");

@@ -170,6 +170,79 @@ RetroAchievements: the SDK carries rcheevos (`sdk/src/rcheevos`). `sdk/sources.t
 sources, plus `-I` (relative to the SDK) and `-D` lines, which Setup passes to the compiler.
 On Windows the game also links `winhttp`.
 
+## macOS
+
+```sh
+tools/package_release_mac.sh       # on a Mac with Xcode's command line tools, CMake and Ninja
+                                   # -> dist/RondoRecomp-<version>-macos-arm64.zip
+```
+
+Apple silicon only, macOS 15 or newer: that is the minimum of Zig 0.17's own macOS build,
+which Setup runs. SDL3 and the game are built for macOS 11, and the script works the app's
+minimum (`LSMinimumSystemVersion`) out from the programs inside. The script builds:
+- SDL3 3.4.18, shared and for macOS 11, since Homebrew's is only for the Mac that built it;
+- Setup and the SDK against it (zlib is macOS's own).
+
+It then puts `RondoRecomp.app` together and zips it with `ditto`:
+
+| File | |
+|---|---|
+| `Contents/MacOS/RondoRecomp Setup` | Setup's window, and what the app starts (`tools/mac/Info.plist`) |
+| `Contents/MacOS/rondo_setup` | Setup from the command line |
+| `Contents/Frameworks/libSDL3.0.dylib` | for the two Setup programs (`@executable_path/../Frameworks`) |
+| `Contents/Resources/sdk/`, `zig/` | as on Linux (`sdk/lib/libSDL3.0.dylib` to link against), Zig for `aarch64-macos` |
+| `Contents/Resources/version.txt`, `AppIcon.icns`, `README.txt`, `THIRD_PARTY.txt` | as in the AppImage; the icon is `tools/linux/rondorecomp.png` |
+
+It is ad-hoc signed, not notarized: the first time, the player allows it in System Settings,
+Privacy & Security, Open Anyway. The app is signed, so nothing is written into it. As with
+the AppImage, Setup builds the game in a folder of the player's instead,
+`~/Library/Application Support/RondoRecomp/install` (`RONDO_HOME` sets another). The game is
+`rondo` with `libSDL3.0.dylib` next to it (`-Wl,-rpath,@executable_path`), linked by
+`zig cc -target aarch64-macos.11.0`. Zig carries macOS's headers and `libSystem` stubs, so the
+player needs no Xcode. Zig's linker signs the game ad hoc, which Apple silicon requires.
+
+Setup's programs call `rondo_mac_app()` (`tools/frontend/programs.h`) first. In the app, it
+sets `RONDO_APP` (the app), `RONDO_APPDIR` (its `Contents/Resources`, which is also
+`SDL_GetBasePath()` in an app) and `RONDO_HOME`, for them and for the game they start.
+Opened from the Finder, the Setup window does what `AppRun` does
+(`tools/setup/gui.c: mac_app_start`):
+- it `exec`s the game when this version built it (`build/version.txt` against the app's
+  `version.txt`);
+- it rebuilds first when another version built it;
+- it opens Setup's window when there is no game yet, or with `--setup`.
+
+The game and Setup hand over with `exec`, as on Linux. LaunchServices keeps the process as
+the app (its bundle id, name and Dock icon) through each `exec`. `RONDO_APP` being set tells
+Setup that the game started it.
+
+**Quarantine.** A browser marks what it downloads, and unzipping marks every file in the app.
+macOS runs a marked program only once the player has allowed it. The player allows the app
+they open, not the `zig` inside it: macOS would stop zig with a "Not Opened" dialog, and
+Setup would wait for it. So Setup runs its own copy of zig, `build/zig/zig` in the game's
+folder, made with `copyfile(COPYFILE_CLONE)`. On APFS that is a clone and takes no space.
+The copy's quarantine is removed, and zig's files stay in the app (`ZIG_LIB_DIR`).
+
+**Updates** (`update_mac_app` in `tools/setup/install.c`):
+1. Download `RondoRecomp-<v>-macos-arm64.zip` into `update/`, its size and SHA-256 checked.
+2. Unpack it with `ditto` next to the app (`RondoRecomp.app.new/`). Setup downloaded it
+   itself, so it carries no quarantine.
+3. Run its `rondo_setup --rebuild`.
+4. Only then rename the old app aside and the new one into its place.
+
+An app that macOS runs from a read-only copy cannot be replaced. That happens when a
+downloaded app was left where it was unzipped (App Translocation). Setup then asks the
+player to move it to Applications first.
+
+`tools/updtest/macos.sh` tests the whole of it from the zip:
+- Setup from a disc;
+- the app opened with `open`, then game → Setup → game, in one process;
+- the game's own update from a local server, after which the app is replaced, still
+  verifies (`codesign --verify --deep --strict`), and the restarted game's `--autotest`
+  passes.
+
+The game's `--test-achievements`, `--autotest`, `--autotest-start` and `--autotest-features`
+pass on macOS as on the other systems. The Japanese disc's RetroAchievements hash is game 4855's.
+
 ## CHD
 
 A `.chd` (MAME's compressed hunks of data, as `chdman createcd` makes it) is kept as it is:

@@ -384,6 +384,8 @@ void ach_init(Pce *p, Settings *s)
     rc_client_get_user_agent_clause(client, clause, sizeof clause);
 #ifdef _WIN32
     snprintf(agent, sizeof agent, "RondoRecomp/" RONDO_VERSION " (Windows) %s", clause);
+#elif defined(__APPLE__)
+    snprintf(agent, sizeof agent, "RondoRecomp/" RONDO_VERSION " (macOS) %s", clause);
 #else
     snprintf(agent, sizeof agent, "RondoRecomp/" RONDO_VERSION " (Linux) %s", clause);
 #endif
