@@ -270,6 +270,7 @@ int main(int argc, char **argv)
             const char *c = argv[++i];
             move_opts.eight_way = strstr(c, "eight") != NULL;
             move_opts.limp_whip = strstr(c, "limp") != NULL;
+            move_opts.stair_catch = strstr(c, "stairs") != NULL;
         }
         else if (!strcmp(argv[i], "--ram-trace") && i + 1 < argc) ram_trace = fopen(argv[++i], "wb");
         else if (!strcmp(argv[i], "--write-watch") && i + 1 < argc) {

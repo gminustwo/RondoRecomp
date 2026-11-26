@@ -231,6 +231,10 @@ Gameplay   Skip cinematics: Press START, Automatically, or Never. During the log
            Reduce slowdown (off by default): busy scenes (lots of enemies, Death's
            scythes) no longer slow down: the game gets extra CPU time each frame. Not in
            RetroAchievements hardcore mode
+           Sticky stairs (off by default): a jump that comes down onto stairs lands on
+           them without holding Up (Up is held for you while you come down, unless you
+           attack or hold Down; after a whip in the jump too, once the whip is put away).
+           Not in RetroAchievements hardcore mode
            Run (on by default): holding the Run control (LB / S) runs, as in Symphony of
            the Night (see Controls above); off, it does nothing
            Discord status (on by default): while the Discord app runs on the same

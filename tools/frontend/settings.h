@@ -32,6 +32,7 @@ typedef struct Settings {
     bool eight_way;        /* Richter's whip and Maria's doves in 8 directions (moves.h) */
     bool limp_whip;        /* Richter's whip hangs while Attack is held (moves.h) */
     bool reduce_slowdown;  /* extra CPU time so busy scenes do not slow down (pce.h; off by default) */
+    bool sticky_stairs;    /* jumps land on stairs without Up held (moves.h; off by default) */
     bool run;              /* the Run control (hold LB) runs, as in Symphony of the Night (game.h) */
     bool discord;          /* the Discord app on this computer shows the stage on the player's profile (discord.h) */
     int slot;              /* save-state slot 1-9 */

@@ -1185,7 +1185,8 @@ int main(int argc, char **argv)
         GameCheats cheats = {set.cheat_health, set.cheat_hearts, set.cheat_lives, set.maria_unlocked, set.play_maria};
         bool hardcore = ach_hardcore();
         if (hardcore) memset(&cheats, 0, sizeof cheats);   /* RetroAchievements' hardcore mode: none */
-        move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode};
+        move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode,
+                                  set.sticky_stairs && !hardcore && !test_mode};
         /* Gameplay > Reduce slowdown: half a frame of extra CPU time a frame (pce.h; it changes how
          * the game runs: not in hardcore) */
         pce_set_extra_cpu(set.reduce_slowdown && !hardcore && !test_mode ? 131 : 0);
@@ -1597,7 +1598,7 @@ int main(int argc, char **argv)
              * them: Up and Attack (Up kept from the game) whips upward; Attack kept held hangs
              * the whip, and forward on the d-pad swings it ahead. */
             if (pce.wram[RONDO_CHARACTER] == 0) {
-                MoveOptions on = {true, true};
+                MoveOptions on = {true, true, false};
                 move_opts = on;
                 moves_reset(&moves);
                 int up_frames = 0, up_box = -999, limp_frames = 0, limp_ahead = -999, up_seen = 0;
