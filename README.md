@@ -43,6 +43,7 @@ ISO/WAV/BIN tracks); everything derived from it goes to `work/`, which is git-ig
 - Save stating
 - Cheats
 - Super Castlevania IV moves (Gameplay page): 8-way whipping and dove throwing, and a limp whip, after Pizzano's Super Rondo of Blood hack (RondoRecomp's own version)
+- **Reduce slowdown** (Gameplay page, off by default): busy scenes such as Death's fight, scythes flying and blood splashing, keep full speed: the game's CPU gets half a frame of extra time each frame, the picture and sound waiting meanwhile. Not in RetroAchievements hardcore mode
 - RetroAchievements
 - Discord status: your Discord profile shows the stage you're in (Stage 0 to 7, the other routes' 2' to 5', the final stage), the title screen or the start screen, and for how long; Gameplay page turns it off. Only the Discord app on the same computer is talked to
 - Portable mode: tick Portable in Setup (or make a `user` folder next to `rondo.exe` or the AppImage) and options, saves and states are kept there

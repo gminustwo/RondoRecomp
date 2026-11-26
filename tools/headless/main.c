@@ -217,6 +217,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--profile")) prof = calloc(1u << 24, sizeof *prof);
         else if (!strcmp(argv[i], "--bios-reset") && i + 1 < argc) bios_reset = argv[++i];
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
+        else if (!strcmp(argv[i], "--extra-cpu") && i + 1 < argc) pce_set_extra_cpu(atoi(argv[++i]));   /* Reduce slowdown: lines of extra CPU time */
         else if (!strcmp(argv[i], "--record-seeds") && i + 1 < argc) seeds_path = argv[++i];
         else if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses_path = argv[++i];
         else if (!strcmp(argv[i], "--verify") && i + 1 < argc) verify = atoi(argv[++i]);

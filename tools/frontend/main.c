@@ -1186,6 +1186,9 @@ int main(int argc, char **argv)
         bool hardcore = ach_hardcore();
         if (hardcore) memset(&cheats, 0, sizeof cheats);   /* RetroAchievements' hardcore mode: none */
         move_opts = (MoveOptions){set.eight_way && !hardcore && !test_mode, set.limp_whip && !hardcore && !test_mode};
+        /* Gameplay > Reduce slowdown: half a frame of extra CPU time a frame (pce.h; it changes how
+         * the game runs: not in hardcore) */
+        pce_set_extra_cpu(set.reduce_slowdown && !hardcore && !test_mode ? 131 : 0);
         bool rewinding = false, ran_frame = false;
         if (menu_on_start_screen(&menu)) {
             /* the start screen: the game waits for Play (nothing runs, nothing sounds) */

@@ -391,12 +391,46 @@ void pce_audio_render(Pce *p, int16_t *out, int frames)
     sound_take_fit(&p->snd, out, frames);   /* what the frame made, as `frames`: no delay builds up */
 }
 
+/* Reduce slowdown (host setting, outside the machine state): CPU time given to the game just
+ * before each vertical blank, the clock, timer, video and sound standing still meanwhile, so
+ * a frame that would have run long (the game drops a frame then: slowdown) finishes in time.
+ * The game runs exactly as before otherwise; once done with its frame it waits for the blank
+ * as ever. 0 = off. */
+static int extra_lines;
+void pce_set_extra_cpu(int lines) { extra_lines = lines < 0 ? 0 : lines > 263 ? 263 : lines; }
+
+static void run_free(Pce *p, int master)
+{
+    HuC6280 *c = &p->cpu;
+    while (master > 0) {
+        int hle = try_hle(p);
+        if (hle >= 0) {
+            master -= hle * 3;
+            p->at_entry = true;
+            continue;
+        }
+        /* (no interrupt is raised meanwhile: the blank's comes after; one already pending
+         * is taken as usual) */
+        uint8_t lines = (uint8_t)((p->vdc.irq ? HU_IRQ1 : 0) | (p->timer_irq ? HU_TIRQ : 0));
+        c->irq_pending = lines & (uint8_t)~p->irq_disable;
+        bool irq = c->irq_pending && !(c->p & HU_FLAG_I);
+        if (p->at_entry && !irq && p->on_entry) p->on_entry(p, p->on_entry_ctx);
+        if (p->on_step) p->on_step(p, p->on_step_ctx);
+        const uint8_t *pg = c->page_ptr[c->mpr[c->pc >> 13]];
+        uint8_t op = pg ? pg[c->pc & 0x1FFF] : 0xEA;
+        int n = hu_step(c);
+        p->at_entry = irq || creates_entry(op);
+        master -= n * (c->high_speed ? 3 : 12);
+    }
+}
+
 void pce_run_frame(Pce *p)
 {
     for (int line = 0; line < PCE_LINES_PER_FRAME; line++) {
         p->line = line;
         vdc_line_start(&p->vdc, line);
         uint64_t end = p->master + PCE_MASTER_PER_LINE;
+        if (line == p->vdc.display_end && extra_lines) run_free(p, extra_lines * PCE_MASTER_PER_LINE);
         if (line == p->vdc.display_end) {
             /* vertical blank half a line in, after the raster compare's interrupt has read
              * the status (vdc_vblank) */

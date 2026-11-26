@@ -228,6 +228,9 @@ Gameplay   Skip cinematics: Press START, Automatically, or Never. During the log
            from his hand; the d-pad swings it around (it still hurts what it touches) and
            letting go of Attack ends it. Ideas from Pizzano's Super Rondo of Blood hack,
            made anew for RondoRecomp (none of the hack is used)
+           Reduce slowdown (off by default): busy scenes (lots of enemies, Death's
+           scythes) no longer slow down: the game gets extra CPU time each frame. Not in
+           RetroAchievements hardcore mode
            Run (on by default): holding the Run control (LB / S) runs, as in Symphony of
            the Night (see Controls above); off, it does nothing
            Discord status (on by default): while the Discord app runs on the same

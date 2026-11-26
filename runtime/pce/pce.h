@@ -90,6 +90,9 @@ bool pce_map_real_bios(Pce *p, const char *path, char *err, int err_len);
 /* Do what the System Card does before handing over to the disc: load the IPL and jump. */
 bool pce_boot(Pce *p, char *err, int err_len);
 void pce_run_frame(Pce *p);
+/* Reduce slowdown: this many lines' worth of extra CPU time before each vertical blank, all
+ * else standing still (host setting, not saved in states; 0 = off). */
+void pce_set_extra_cpu(int lines);
 /* Calls a game routine (JSR-like) with A set and interrupts off, until it returns.
  * Used by the code generator to run the game's own overlay loader. */
 bool pce_call(Pce *p, uint16_t addr, uint8_t a, long max_instructions);
