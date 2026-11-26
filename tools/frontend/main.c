@@ -47,6 +47,7 @@
 #include "wide.h"
 #include "titleart.h"
 #include "title_art_data.h"
+#include "secret.h"
 
 #define FRAME_RATE (7159090.0 / (455.0 * 263.0))   /* 59.826 Hz */
 #define AUDIO_RATE 44100
@@ -249,12 +250,15 @@ static void load_title_art(const char *dir)
  * one already played. */
 static void run_frame_as(bool live)
 {
+    /* (the easter egg needs widescreen: its fight is made for the wider picture) */
+    if (live) secret_frame(&pce, !ach_hardcore() && wide.want > 0);
     wide_frame(&wide, &pce);
     prompt_before_frame(&prompt, &pce);
     moves_before_frame(&moves, &pce, &move_opts, live);
     pce_run_frame(&pce);
     prompt_after_frame(&prompt, &pce);
     moves_after_frame(&moves, &pce, &move_opts, live);
+    secret_after_frame(&pce);
 }
 
 static void run_frame(void) { run_frame_as(true); }
@@ -264,6 +268,7 @@ static void watch_reset(void)
 {
     game_watch_reset(&gw, &pce);
     moves_reset(&moves);
+    secret_reset();
 }
 
 typedef struct Session {
@@ -687,6 +692,7 @@ int main(int argc, char **argv)
     Settings set;
     settings_load(&set, settings_path);
     load_title_art(pref_dir);
+    secret_set_title_arts(arts, n_arts);
     if (showcase) {   /* the options it changes are kept next to the script, not in the profile */
         snprintf(settings_path, sizeof settings_path, "%s.settings.ini", showcase);
         char serr[300];

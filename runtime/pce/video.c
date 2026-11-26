@@ -20,6 +20,13 @@ void vdc_bat_written_clear(void) { memset(bat_written, 0, sizeof bat_written); }
 
 /* ---- VCE ----------------------------------------------------------------- */
 
+/* Smooth fades (host-side, outside the machine state; see video.h). fade_argb is the
+ * palette the picture is drawn with while they are on: worked out at each picture's start,
+ * and an entry the game writes after that shows as written for the rest of the picture
+ * (raster palette changes, such as Richter's reflection in the water, stay exact). */
+static bool fade_on;
+static uint32_t fade_argb[512];
+const uint32_t *vce_shown_argb(const Vce *v) { return fade_on ? fade_argb : v->argb; }
 /* the colours each 16 lines of the last picture were drawn with (vdc_line_palette) */
 static uint32_t line_pal[(PCE_FB_MAX_H + 15) / 16][512];
 const uint32_t *vdc_line_palette(int row)
@@ -28,6 +35,87 @@ const uint32_t *vdc_line_palette(int row)
     if (row >= PCE_FB_MAX_H) row = PCE_FB_MAX_H - 1;
     return line_pal[row >> 4];
 }
+static unsigned fade_frame;
+static struct FadeEntry {
+    uint16_t val;           /* the 9-bit value last seen at a picture's start */
+    uint32_t raw;           /* its colour */
+    uint32_t from, to;      /* blending from -> to over len pictures from start */
+    unsigned start, last;   /* when the blend started; when val last changed */
+    uint8_t len;
+    bool stepped;           /* val's last change was a fade step (each channel 1 level at most) */
+    int8_t dir[3];          /* the way each channel last moved (0 not yet) */
+} fade[512];
+
+void vce_set_smooth_fades(bool on)
+{
+    if (on && !fade_on) memset(fade, 0, sizeof fade);   /* starts from what is there now */
+    fade_on = on;
+}
+
+static uint32_t mix(uint32_t a, uint32_t b, unsigned t /* 0-256 */)
+{
+    uint32_t out = 0xFF000000u;
+    for (int s = 0; s < 24; s += 8) {
+        int ca = (int)(a >> s & 0xFF), cb = (int)(b >> s & 0xFF);
+        out |= (uint32_t)(ca + (cb - ca) * (int)t / 256) << s;
+    }
+    return out;
+}
+
+/* The blend's first picture is already 1/len of the way: the last step shows len - 1
+ * pictures after the game's */
+static uint32_t fade_shown(const struct FadeEntry *e, unsigned now)
+{
+    unsigned k = now - e->start + 1;
+    return k < e->len ? mix(e->from, e->to, k * 256u / e->len) : e->to;
+}
+
+/* At a picture's start. The game fades by stepping each channel of each colour one level
+ * (of 8) every few pictures; a step that follows another the same way is blended in over as
+ * many pictures as the last one took, so a fade passes through 256 levels a channel instead
+ * of 8. It ends a step's length (at most 16 pictures) less one after the game's own. Any
+ * other change shows at once, as does the first step of a fade (its pace is not known yet). */
+static void fade_begin(const Vce *v)
+{
+    unsigned now = ++fade_frame;
+    for (int i = 0; i < 512; i++) {
+        struct FadeEntry *e = &fade[i];
+        uint32_t raw = v->argb[i];
+        uint32_t shown = fade_shown(e, now);
+        if (v->pal[i] != e->val || e->last == 0) {
+            int d[3], step = 1;
+            for (int c = 0; c < 3; c++) {
+                d[c] = (v->pal[i] >> (3 * c) & 7) - (e->val >> (3 * c) & 7);
+                if (d[c] < -1 || d[c] > 1) step = 0;
+            }
+            unsigned gap = now - e->last;
+            bool same_way = step;
+            for (int c = 0; c < 3; c++)
+                if (d[c] && e->dir[c] && (d[c] > 0) != (e->dir[c] > 0)) same_way = false;
+            if (e->last && e->stepped && same_way && gap >= 2 && gap <= 16) {
+                e->from = shown;
+                e->len = (uint8_t)gap;
+            } else {
+                e->from = raw;
+                e->len = 0;
+            }
+            e->to = raw;
+            e->start = now;
+            for (int c = 0; c < 3; c++) e->dir[c] = !step ? 0 : d[c] ? (int8_t)d[c] : e->dir[c];
+            e->stepped = step;
+            e->val = v->pal[i];
+            e->last = now;
+            e->raw = raw;
+            shown = fade_shown(e, now);
+        } else if (raw != e->raw) {
+            /* the same value in another colour (grayscale turned on or off): at once */
+            e->raw = e->from = e->to = shown = raw;
+            e->len = 0;
+        }
+        fade_argb[i] = shown;
+    }
+}
+
 static void vce_update(Vce *v, int i)
 {
     uint16_t c = v->pal[i];
@@ -38,6 +126,7 @@ static void vce_update(Vce *v, int i)
     }
     r = r * 255 / 7; g = g * 255 / 7; b = b * 255 / 7;
     v->argb[i] = 0xFF000000u | r << 16 | g << 8 | b;
+    fade_argb[i] = v->argb[i];
 }
 
 void vce_reset(Vce *v)
@@ -212,17 +301,33 @@ static uint32_t behind_px[PCE_FB_MAX_W * PCE_FB_MAX_H];
 const uint32_t *vdc_behind_pixels(void) { return behind_px; }
 static bool side_real;
 void vdc_set_side_real(bool on) { side_real = on; }
+static int side_sprites;   /* VDC_SIDE_LEFT | VDC_SIDE_RIGHT: sprites drawn there after all */
+void vdc_set_side_sprites(int sides) { side_sprites = sides; }
 static int side_fade;   /* VDC_SIDE_LEFT | VDC_SIDE_RIGHT */
 void vdc_set_side_fade(int sides) { side_fade = sides; }
 static int side_flip;
 void vdc_set_side_flip(int sides) { side_flip = sides; }
 static const uint16_t *map_fill;
+static bool map_fill_all;
 void vdc_set_map_fill(const uint16_t *fill) { map_fill = fill; }
+void vdc_set_map_fill_all(bool all) { map_fill_all = all; }
 static const uint16_t *map_patch;
 void vdc_set_map_patch(const uint16_t *patch) { map_patch = patch; }
 static const uint16_t *side_vram;
 static int side_vram_side;
 static const int16_t *side_vram_dx, *side_vram_dy;
+/* (a jump in a line's scroll from the frame before, seen as the line is drawn: the host
+ * follows it in dx/dy from the next frame on, this one is drawn with it here) */
+static int side_vram_jx, side_vram_jy;
+static const uint16_t *kept_left, *kept_right;
+static int kept_first, kept_last;
+void vdc_set_side_kept(const uint16_t *left, const uint16_t *right, int first, int last)
+{
+    kept_left = left;
+    kept_right = right;
+    kept_first = first;
+    kept_last = last;
+}
 void vdc_set_side_vram(const uint16_t *vram, int side, const int16_t *dx, const int16_t *dy)
 {
     side_vram = vram;
@@ -287,6 +392,14 @@ const uint8_t *vdc_row_bg_edge(void) { return row_bg_edge; }
 void vdc_set_row_clip(const uint8_t *rows) { row_clip = rows; }
 static uint64_t sprite_hide;
 void vdc_set_sprite_hide(uint64_t mask) { sprite_hide = mask; }
+static VdcFade sprite_fade[VDC_FADES];
+static int n_sprite_fade;
+void vdc_set_sprite_fades(const VdcFade *list, int n)
+{
+    n_sprite_fade = n < 0 ? 0 : n > VDC_FADES ? VDC_FADES : n;
+    if (n_sprite_fade) memcpy(sprite_fade, list, (size_t)n_sprite_fade * sizeof *list);
+}
+static const uint8_t FADE_DITHER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 static const VdcExtraSprite *extra_spr;
 #define EXTRA_PX 0x4000   /* (a pixel of an extra sprite: kept beside the 256 pixels with side tiles) */
 static int n_extra;
@@ -325,16 +438,19 @@ static void render_bg(Vdc *d, int y, int x0, int w, uint16_t *out, int line)
         /* (side VRAM: beyond the original 256 pixels on its side, map and tiles from it) */
         const uint16_t *v = d->vram;
         map = own_map;
-        int prow = row;
+        int prow = row, srow = py >> 3;
+        bool on_vram = false;
         if (side_vram && (side_vram_side < 0 ? x0 + x < 0 : x0 + x >= 256)) {
-            int spy = (y + side_vram_dy[line]) & (mh * 8 - 1);
+            int spy = (y + side_vram_dy[line] + side_vram_jy) & (mh * 8 - 1);
+            on_vram = true;
+            srow = spy >> 3;
             v = side_vram;
             map = &side_vram[(spy >> 3) * mw];
-            px = (sx + x + side_vram_dx[line]) & (mw * 8 - 1);
+            px = (sx + x + side_vram_dx[line] + side_vram_jx) & (mw * 8 - 1);
             prow = spy & 7;
         }
         uint16_t e = map[px >> 3];
-        if (map_fill && w > 256 && (x0 + x < 0 || x0 + x >= 256)) {
+        if (map_fill && w > 256 && (map_fill_all || x0 + x < 0 || x0 + x >= 256)) {
             /* beside the original 256 pixels: the map's own entry, or its fill */
             uint16_t f = map_fill[(py >> 3) * VDC_FILL_W + ((px >> 3) & (VDC_FILL_W - 1))];
             if (f != VDC_SIDE_NONE) e = f;
@@ -350,12 +466,33 @@ static void render_bg(Vdc *d, int y, int x0, int w, uint16_t *out, int line)
             if (k >= VDC_SIDE_TILES) k = VDC_SIDE_TILES - 1;
             if (side_real && col >= 0 && col < mw) k = -1;   /* the map's own, short of wrapping round */
             if (k >= 0) {
-                flip = (side_flip & (col < first ? VDC_SIDE_LEFT : VDC_SIDE_RIGHT)) != 0;
-                e = col < first ? sl[k] : sr[k];
+                bool lft = col < first;
+                flip = (side_flip & (lft ? VDC_SIDE_LEFT : VDC_SIDE_RIGHT)) != 0;
+                if (on_vram && kept_left && kept_right) {
+                    /* (the room as it was: its kept side tiles past where its picture began,
+                     * its own map's columns short of them) */
+                    int oc = px >> 3;
+                    int j = lft ? kept_first - 1 - oc : oc - kept_last - 1;
+                    j = ((j % mw) + mw) % mw;
+                    if (j >= mw / 2) j -= mw;
+                    if (j >= 0) {
+                        if (j >= VDC_SIDE_TILES) j = VDC_SIDE_TILES - 1;
+                        e = (lft ? kept_left : kept_right)[srow * VDC_SIDE_TILES + j];
+                    } else {
+                        flip = false;   /* (e: that map's own entry) */
+                    }
+                } else {
+                    e = lft ? sl[k] : sr[k];
+                    if (e == VDC_SIDE_MAP) {
+                        e = map[px >> 3];
+                        flip = false;
+                    }
+                }
                 if (e == VDC_SIDE_NONE) {
                     out[x] = 0;
                     continue;
                 }
+                if (e & VDC_SIDE_OWN) flip = false;   /* (the map's own entry, as it is) */
             }
         }
         uint32_t base = ((uint32_t)(e & 0x7FF) * 16 + prow) & 0x7FFF;
@@ -392,6 +529,13 @@ static void render_sprites(Vdc *d, int y, int x0, int w, uint16_t *out)
         /* 10-bit X: in widescreen, values past the right of any real display are
          * sprites to the left of the picture */
         if (x0 && sx >= 1024 - 32 + x0 - 32) sx -= 1024;
+        int fade = 16;   /* (vdc_set_sprite_fades: by the sprite's middle) */
+        for (int k = 0; k < n_sprite_fade; k++) {
+            const VdcFade *f = &sprite_fade[k];
+            int mx = sx + sw / 2, my = sy + h / 2;
+            if (!(s[3] & 0x80) && mx >= f->x0 && mx < f->x1 && my >= f->y0 && my < f->y1 && f->level < fade)
+                fade = f->level;
+        }
         sx -= x0;
         int pattern = (s[2] >> 1) & 0x3FF;
         if (pattern >= move_lo && pattern <= move_hi) sx += move_dx;
@@ -418,6 +562,7 @@ static void render_sprites(Vdc *d, int y, int x0, int w, uint16_t *out)
                       ((d->vram[(a + 32) & 0x7FFF] >> bit) & 1) << 2 |
                       ((d->vram[(a + 48) & 0x7FFF] >> bit) & 1) << 3;
             if (!col) continue;
+            if (fade < 16 && FADE_DITHER[y & 3][(x + x0) & 3] >= fade) continue;
             if (i == 0) spr0_drawn[x] = true;
             else if (spr0_drawn[x]) raise(d, VDC_ST_CR, (d->reg[R_CR] & 0x01) != 0);
             if (!out[x] && !hidden) out[x] = (uint16_t)(front | pal | col);
@@ -461,6 +606,7 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
     if (d->first_line) {
         y = d->reg[R_BYR] & 0x1FF;
         d->first_line = false;
+        if (fade_on) fade_begin(vce);
     } else {
         y = (d->bg_y + 1) & 0x1FF;
     }
@@ -474,6 +620,13 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
     uint16_t cr = d->reg[R_CR];
     int x0 = -d->fb_wide + fb_shift;
     int orig = d->fb_wide - fb_shift;   /* where the original 256 pixels start */
+    side_vram_jx = side_vram_jy = 0;
+    if (side_vram) {   /* (as the host measures it: a jump past 32 px) */
+        int jx = ((d->reg[R_BXR] & 0x3FF) - row_scroll[row] + 512) & 511, jy = (y - row_map_y[row] + 512) & 511;
+        if (jx > 256) jx -= 512;
+        if (jy > 256) jy -= 512;
+        if (jx > 32 || jx < -32 || jy > 32 || jy < -32) side_vram_jx = -jx, side_vram_jy = -jy;
+    }
     row_scroll[row] = d->reg[R_BXR] & 0x3FF;
     row_map_y[row] = (uint16_t)y;
     if (cr & 0x80) render_bg(d, y, x0, w, bg, row);
@@ -482,7 +635,9 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
         /* side tiles: no sprites beside the original 256 pixels (a game parks the ones it
          * does not use just off its screen) */
         for (int x = 0; x < w; x++)
-            if ((x < orig || x >= orig + 256) && !(sp[x] & EXTRA_PX)) sp[x] = 0;
+            if (((x < orig && !(side_sprites & VDC_SIDE_LEFT)) || (x >= orig + 256 && !(side_sprites & VDC_SIDE_RIGHT))) &&
+                !(sp[x] & EXTRA_PX))
+                sp[x] = 0;
     }
     {
         bool any = false;
@@ -492,7 +647,7 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
     }
 
     uint32_t *dst = &d->fb[row * PCE_FB_MAX_W];
-    const uint32_t *pal = vce->argb;
+    const uint32_t *pal = fade_on ? fade_argb : vce->argb;
     if ((row & 15) == 0) memcpy(line_pal[row >> 4], pal, sizeof line_pal[0]);   /* (vdc_line_palette) */
     uint8_t *spx = &sprite_px[row * PCE_FB_MAX_W];
     uint32_t *bhx = &behind_px[row * PCE_FB_MAX_W];

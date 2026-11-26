@@ -74,6 +74,15 @@ void sound_adpcm_stop(Sound *s, uint64_t now);
 void sound_adpcm_stream(Sound *s, uint64_t now, int lba, uint32_t bytes, uint8_t rate);
 /* Fade the ADPCM volume out (step per output block; 0 = cancel and restore). */
 void sound_adpcm_fade(Sound *s, int step);
+/* A host voice (the frontend's own sounds, e.g. secret.c's door): `len` bytes of ADPCM in
+ * the game's format (high nibble first) at `rate` (as AD_PLAY's), from `data` (the caller's,
+ * kept until it ends or is stopped), mixed over the game's sound at the ADPCM's level. Not
+ * part of the system's state (save states, rewind). */
+void sound_extra_play(const uint8_t *data, uint32_t len, uint8_t rate);
+/* ... at `volume` (256: the ADPCM's level), its highs softened by `soften` (0 none - 255: a
+ * one-pole low-pass, its new sample's share 256 - soften) */
+void sound_extra_play_at(const uint8_t *data, uint32_t len, uint8_t rate, int volume, int soften);
+void sound_extra_stop(void);
 /* Take up to n frames of mixed PSG + ADPCM output (adds to out); returns frames taken. */
 int sound_take(Sound *s, int16_t *out, int n);
 /* Drop all but the newest `keep` frames left in the buffer. */

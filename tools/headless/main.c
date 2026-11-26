@@ -17,6 +17,7 @@
 #include "../frontend/prompt.h"
 #include "../frontend/wide.h"
 #include "../frontend/titleart.h"
+#include "../frontend/secret.h"
 #include "recomp/recomp.h"
 #include "../recomp/capture_script.h"
 #include "util/png.h"
@@ -216,6 +217,7 @@ int main(int argc, char **argv)
     int n_run = 0;
     long rows_from = -1, rows_to = -1;   /* --row-scroll A:B: each frame's bands of rows by X scroll */
     long sat_at[8]; /* --dump-sat FRAME: print the sprite table after that frame */
+    bool secret_on = false;   /* --secret: the Konami code door (secret.h) */
     int wide = 0;   /* --wide N: widescreen extension in pixels per side (42 = 16:9 at 4:3, 70 square) */
     bool wide_edges = false;   /* --wide-edges: Video > Level ends */
     bool wide_menus = false;   /* --wide-menus: Video > Wide menus */
@@ -324,7 +326,9 @@ int main(int argc, char **argv)
                 fclose(tf);
             }
             if (!title_art.loaded) fprintf(stderr, "cannot read %s (396 x 228 ARGB, raw)\n", argv[i]);
+            else secret_set_title_arts(&title_art, 1);
         }
+        else if (!strcmp(argv[i], "--secret")) secret_on = true;
         else if (!strcmp(argv[i], "--wide-skip") && i + 1 < argc) {   /* leave patches out: list of indexes */
             char tmp[128];
             snprintf(tmp, sizeof tmp, "%s", argv[++i]);
@@ -477,6 +481,7 @@ int main(int argc, char **argv)
         pce.pad = moves_pad(&moves, &pce, &move_opts, pce.pad, pce.pad & PAD_II);
         if (pause_menu_on) pce.pad = pause_menu_pad(&pm, &pce, pce.pad, true);
         if (prompt_dev >= 0) prompt_before_frame(&tp, &pce);
+        if (secret_on) secret_frame(&pce, wide > 0);   /* (it needs widescreen, as in the game) */
         if (wide_off_at && f == wide_off_at) { wd.want = 0; wide_off(&wd, &pce); }
         wide_frame(&wd, &pce);
         if (wide_edges && wd.shift != last_shift) {   /* --wide-edges: where the picture moves over */
@@ -502,6 +507,7 @@ int main(int argc, char **argv)
                        pce.wram[0x31], pce.vdc.fb_wide, wd.patched ? "every game change in" : "not every game change in", buf);
             }
         moves_after_frame(&moves, &pce, &move_opts, true);
+        if (secret_on) secret_after_frame(&pce);
         game_apply_cheats(&pce, &cheats, &gw);
         {
             bool run = false;

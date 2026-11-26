@@ -17,6 +17,13 @@ typedef struct Vce {
 } Vce;
 
 void vce_reset(Vce *v);
+/* Smooth fades (host setting, outside the machine state; one picture is drawn at a time per
+ * process): the game's fades, which step each colour channel through 8 levels, are drawn
+ * blended through 256. Only the picture changes: the palette the game reads and writes, save
+ * states and the game's behaviour are the same either way. Off by default. */
+void vce_set_smooth_fades(bool on);
+/* The 512 colours the picture is drawn with now (Smooth fades' blend while it is on). */
+const uint32_t *vce_shown_argb(const Vce *v);
 /* The 512 colours the line `row` of the last picture was drawn with (taken every 16 lines: a
  * game can change colours while the picture is drawn, as the title's lightning does). */
 const uint32_t *vdc_line_palette(int row);
@@ -99,6 +106,14 @@ const uint8_t *vdc_row_bg_blank(void);
 const uint8_t *vdc_row_bg_edge(void);
 void vdc_set_row_clip(const uint8_t *rows);
 void vdc_set_sprite_hide(uint64_t mask);
+/* - vdc_set_sprite_fades: boxes (screen X as the sprite table has it, 0 = the 4:3 picture's
+ *   left; Y) in which a sprite behind the background (scenery: not a hero, an enemy or the
+ *   HUD, all drawn in front) is drawn, by its middle, only in part, a 4 x 4 ordered dither,
+ *   `level` 0 (none of it) to 16 (all): scenery objects the wider picture would show come and
+ *   go fade in and out (wide.c). n 0: none. */
+typedef struct { int16_t x0, x1, y0, y1; uint8_t level; } VdcFade;
+#define VDC_FADES 8
+void vdc_set_sprite_fades(const VdcFade *list, int n);
 /* - vdc_set_hide_corner: sprites parked above the screen with at most their last 8 rows in it
  *   (a game parks unused ones there: the save menu's torch flames, peeking into the picture's
  *   top left) left out of the picture, counted as drawn as above. Widescreen's menus: a sliver
@@ -131,6 +146,8 @@ int vdc_fb_shift(void);
  * displayed line of the last frame was drawn from. */
 #define VDC_SIDE_TILES 12
 #define VDC_SIDE_NONE 0xFFFF
+#define VDC_SIDE_OWN 0x0800   /* an entry with this bit (not a tile bit here) is never flipped */
+#define VDC_SIDE_MAP 0xFFFE   /* the map's own entry there, as it is (not flipped) */
 void vdc_set_side_tiles(const uint16_t *left, const uint16_t *right);
 /* While on (a menu's pages sliding over), the side tiles give way to the map's own entries
  * wherever the picture has not wrapped round the map (columns 0 to the map's width, counted
@@ -141,6 +158,8 @@ void vdc_set_side_real(bool on);
  * towards its outer edges, to black at them (widescreen's walls repeated beside a room kept
  * 4:3, so they recede rather than stand as part of the room). */
 enum { VDC_SIDE_LEFT = 1, VDC_SIDE_RIGHT = 2 };   /* (the sides, for the two below) */
+/* side tiles: the sides (VDC_SIDE_LEFT | VDC_SIDE_RIGHT) where sprites are drawn after all */
+void vdc_set_side_sprites(int sides);
 void vdc_set_side_fade(int sides);
 /* Side flip (host-side, like the above): side tiles drawn mirrored left to right, which the
  * hardware cannot do; with the side tiles holding the room's columns in mirrored order, the
@@ -159,6 +178,11 @@ void vdc_bat_written_clear(void);
  * NULL = off
  * (widescreen: the room left behind through a door, as it was before the next part's
  * graphics were loaded). */
+/* With side VRAM (below) on a side of side tiles: the side drawn as the room it holds was,
+ * line by line from the scroll each line is drawn with: past first (left) / last (right),
+ * columns of that VRAM's map, its own side tiles kept (left / right, VDC_SIDE_TILES a row,
+ * as for vdc_set_side_tiles); short of them, that map's own columns. NULL: off. */
+void vdc_set_side_kept(const uint16_t *left, const uint16_t *right, int first, int last);
 void vdc_set_side_vram(const uint16_t *vram, int side, const int16_t *dx, const int16_t *dy);
 const uint16_t *vdc_row_map_y(void);
 /* Sprite pixels (host-side, like the above): 1 where the last picture shows a sprite's pixel
@@ -174,6 +198,9 @@ const uint32_t *vdc_behind_pixels(void);
  * 4:3 picture ever shows, carried on in its own tiles (wide.c). NULL for none. */
 #define VDC_FILL_W 128
 void vdc_set_map_fill(const uint16_t *fill);
+/* the fill over the original 256 pixels too (an arena made walkable: its camera goes where the
+ * 4:3 fight never takes it, and the scenery's undrawn columns came into those pixels) */
+void vdc_set_map_fill_all(bool all);
 /* Map patch (host-side, like the above): like the map fill, background map entries drawn
  * instead of the map's own by map position, but anywhere in the picture, the original 256
  * pixels too (widescreen's side recipes: a drainpipe at a room's edge, which the wall laid
