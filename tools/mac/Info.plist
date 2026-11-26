@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- RondoRecomp.app (tools/package_release_mac.sh fills in @VERSION@, and @MINOS@: the newest
+     macOS that the programs inside need, Zig's). It starts Setup's
+     window, which starts the game once it is built (tools/setup/gui.c: mac_app_start). -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleExecutable</key><string>RondoRecomp Setup</string>
+    <key>CFBundleIdentifier</key><string>io.github.gminustwo.RondoRecomp</string>
+    <key>CFBundleName</key><string>RondoRecomp</string>
+    <key>CFBundleDisplayName</key><string>RondoRecomp</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>@VERSION@</string>
+    <key>CFBundleVersion</key><string>@VERSION@</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>LSMinimumSystemVersion</key><string>@MINOS@</string>
+    <key>LSArchitecturePriority</key><array><string>arm64</string></array>
+    <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+</dict>
+</plist>

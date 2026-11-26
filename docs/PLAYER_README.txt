@@ -2,8 +2,8 @@ RondoRecomp
 ===========
 
 Turns your own copy of Castlevania: Rondo of Blood (PC Engine Super CD-ROM2) into a
-native Windows or Linux program (the Steam Deck too). No game files are included: you
-provide your own disc image.
+native Windows, Linux (the Steam Deck too) or macOS program. No game files are included:
+you provide your own disc image.
 
 What you need
 -------------
@@ -56,6 +56,24 @@ replace it there.
 To add the other disc later, choose Setup on the game's start screen: the game closes and
 Setup's window opens in its place. In Gaming Mode there may be no file dialog for "Disc
 zip..." (Setup then says so): add discs in Desktop Mode.
+
+macOS
+-----
+The Mac download is RondoRecomp-<version>-macos-arm64.zip, which holds RondoRecomp.app. It
+needs a Mac with Apple silicon (M1 or newer) and macOS 15 Sequoia or newer.
+1. Unzip it (Safari does this for you) and move RondoRecomp.app to Applications.
+2. Open it. RondoRecomp is not notarized by Apple, so the first time macOS says it cannot
+   check it: click Done, open System Settings, Privacy & Security, scroll down to
+   "RondoRecomp was blocked..." and click Open Anyway (then Open, and your password).
+   You only do this once.
+3. Setup opens. Click "Disc zip..." and pick your zip (or the .cue or .chd file), or "Disc
+   folder..." for an unzipped image, and wait until it says Done. Click Play.
+From then on, opening RondoRecomp starts the game. Setup keeps the game it builds, and
+your disc's files, in ~/Library/Application Support/RondoRecomp/install; your settings and
+saves are in ~/Library/Application Support/RondoRecomp/RondoRecomp. To add the other disc
+later, choose Setup on the game's start screen. Updates replace RondoRecomp.app where it is,
+so keep it in Applications (an app opened straight from Downloads cannot be updated).
+The menu key F1 is Fn + F1 on most Mac keyboards; Esc opens the menu too.
 
 Virtual Console (Wii and Wii U)
 -------------------------------

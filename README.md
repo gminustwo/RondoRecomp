@@ -49,7 +49,7 @@ What widescreen also takes care of:
 
 ## Supported Platforms
 
-Currently Windows, Linux x86 (Steam Deck).
+Currently Windows, Linux x86 (Steam Deck) and macOS (Apple silicon, macOS 15 or newer).
 
 > If you want support for a different platform and want to contribute, please feel free to put in a pull request to add that support in.
 
@@ -141,7 +141,9 @@ Findings so far: [docs/findings.md](docs/findings.md).
   records unlocks as softcore, doesn't keep leaderboard entries, and shows a "Warning: Unknown
   Emulator" notice when the game starts. The game then says "softcore only".
 - Windows and Linux (x86-64, glibc 2.35 or newer: the Steam Deck, Ubuntu 22.04, Debian 12,
-  Fedora 36, Arch and later).
+  Fedora 36, Arch and later), and macOS (Apple silicon, macOS 15 Sequoia or newer: an app
+  that builds the game in `~/Library/Application Support/RondoRecomp`; see
+  [docs/distribution.md](docs/distribution.md#macos)).
 - Setup takes the disc image zipped, as a 7z, unzipped or as a `.chd` (MAME's compressed CD
   format, which the game reads as it is: about half the space; see
   [docs/distribution.md](docs/distribution.md#chd)), or the Virtual Console releases:

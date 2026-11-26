@@ -627,6 +627,87 @@ static int update_appimage(const char *dir, const UpdateInfo *info)
 #endif
 }
 
+#ifdef __APPLE__
+/* From the macOS app (programs.h): the new app, zipped, is downloaded into DIR/update and
+ * unpacked next to this one (by ditto, which keeps its files' modes; what this program
+ * downloads is not quarantined, so macOS runs it without asking), builds the game, and only
+ * then takes this one's place: renamed, so this one keeps running from the old files, which
+ * are then removed. A failed build leaves the game and the app as they were. An app that
+ * macOS runs from a read-only copy (App Translocation, when a downloaded app was not moved
+ * out of its folder) cannot be replaced, so the player moves it to Applications first. */
+static int update_mac_app(const char *dir, const UpdateInfo *info)
+{
+    const char *app = rondo_app();
+    char parent[1100], upd[1100], archive[1300], fresh[1100], fresh_app[1200], old[1100];
+    snprintf(parent, sizeof parent, "%s", app);
+    char *slash = strrchr(parent, '/');
+    if (slash) slash[1] = 0;
+    if (strstr(app, "/AppTranslocation/") || access(parent, W_OK) != 0) {
+        snprintf(g_err, sizeof g_err, "macOS runs RondoRecomp from a folder it cannot change (%.200s). Move "
+                 "RondoRecomp.app to Applications, open it from there and update again.", app);
+        return failed("updating");
+    }
+    join(upd, sizeof upd, dir, "update");
+    remove_tree(upd);                              /* whatever an earlier update left */
+    SDL_CreateDirectory(upd);
+    join(archive, sizeof archive, upd, info->asset);
+    snprintf(fresh, sizeof fresh, "%s.new", app);  /* next to the app: renamed in place of it */
+    snprintf(old, sizeof old, "%s.old", app);
+    join(fresh_app, sizeof fresh_app, fresh, "RondoRecomp.app");
+
+    say("\n[2/5] Downloading %s\n", info->asset);
+    int got = 2 + download_part(info);
+    stage("Downloading", 2, got, false);
+    if (!download(info, archive)) { remove_tree(upd); return failed("downloading"); }
+
+    say("\n[3/5] Unpacking\n");
+    stage("Unpacking", got, got + 3, false);
+    remove_tree(fresh);
+    const char *unzip[] = {"/usr/bin/ditto", "-x", "-k", archive, fresh, NULL};
+    bool unpacked = setup_run(unzip);
+    remove_tree(upd);
+    char check1[1300], check2[1300];
+    join(check1, sizeof check1, fresh_app, "Contents/Resources/sdk/sources.txt");
+    join(check2, sizeof check2, fresh_app, "Contents/MacOS/" SETUP_CLI_PROGRAM);
+    if (unpacked && (!exists(check1) || !exists(check2))) {
+        snprintf(g_err, sizeof g_err, "%s is not a RondoRecomp package (no RondoRecomp.app with sdk/sources.txt and Setup)",
+                 info->asset);
+        unpacked = false;
+    }
+    if (!unpacked) { remove_tree(fresh); return failed("unpacking"); }
+
+    say("\n[4/5] Rebuilding " GAME_PROGRAM " with the new version\n");
+    stage("Rebuilding", got + 3, 99, true);
+    const char *args[] = {check2, "--rebuild", "--out", dir, NULL};
+    if (!setup_run(args)) {
+        char why[512];
+        snprintf(why, sizeof why, "%s", g_err);
+        remove_tree(fresh);
+        snprintf(g_err, sizeof g_err, "%s; the game was left as it was", why);
+        return failed("rebuilding");
+    }
+
+    say("\n[5/5] Putting the new app in place of %s\n", app);
+    stage("Installing", 99, 100, false);
+    remove_tree(old);
+    if (rename(app, old) != 0) {
+        snprintf(g_err, sizeof g_err, "cannot move %s aside: %s", app, strerror(errno));
+        remove_tree(fresh);
+        return failed("installing");
+    }
+    if (rename(fresh_app, app) != 0) {
+        snprintf(g_err, sizeof g_err, "cannot put the new app in place of %s: %s", app, strerror(errno));
+        rename(old, app);
+        remove_tree(fresh);
+        return failed("installing");
+    }
+    remove_tree(old);     /* (this program keeps running from its files) */
+    remove_tree(fresh);
+    say("\nUpdated to RondoRecomp %s.\n", info->version);
+    return 0;
+}
+#endif
+
 static int update_steps(const char *dir, bool check_only)
 {
     say("RondoRecomp Setup " RONDO_VERSION " (update)\n\n[1/5] Checking for a new version\n");
@@ -658,6 +739,11 @@ static int update_steps(const char *dir, bool check_only)
         if (info.notes[i][0]) say("    - %s\n", info.notes[i]);
     if (check_only) return 0;
     if (rondo_appimage()) return update_appimage(dir, &info);
+#ifdef __APPLE__
+    if (rondo_app()) return update_mac_app(dir, &info);
+    snprintf(g_err, sizeof g_err, "on macOS RondoRecomp updates from RondoRecomp.app (this is not in one)");
+    return failed("updating");
+#endif
 
     char upd[1100], archive[1300], staged[1200];
     join(upd, sizeof upd, dir, "update");

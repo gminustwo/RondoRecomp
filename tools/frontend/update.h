@@ -9,7 +9,9 @@
  * takes the smaller one when its compiler is the one named (RONDO_ZIG_VERSION), else the full
  * package. On Linux the release is an AppImage (RondoRecomp-<v>-x86_64.AppImage): a game
  * started from one updates by downloading the new AppImage, which takes the old one's place
- * (programs.h, tools/linux/AppRun). Tests point the check elsewhere (RONDO_UPDATE_URL: the
+ * (programs.h, tools/linux/AppRun). On macOS the release is the app, zipped
+ * (RondoRecomp-<v>-macos-arm64.zip, which holds RondoRecomp.app), which takes the old app's
+ * place in the same way (install.c). Tests point the check elsewhere (RONDO_UPDATE_URL: the
  * release's JSON, as GitHub's API gives it) and pretend to be an older version
  * (RONDO_UPDATE_FROM). */
 #pragma once
@@ -21,6 +23,9 @@
 
 #ifdef _WIN32
 #define UPDATE_SYSTEM "windows-x64"
+#define UPDATE_EXT ".zip"
+#elif defined(__APPLE__)
+#define UPDATE_SYSTEM "macos-arm64"   /* the app, zipped (install.c: update_mac_app) */
 #define UPDATE_EXT ".zip"
 #else
 #define UPDATE_SYSTEM "linux-x86_64"

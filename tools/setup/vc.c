@@ -737,12 +737,13 @@ static bool wii_installed(VcFiles *fs, const char *dir, const Content *cs, int n
 }
 
 /* Dolphin's Wii storage (where it installs WADs, decrypted): its own setting
- * (Dolphin.ini: NANDRootPath), then the usual places, on Windows and Linux (Flatpak too) */
+ * (Dolphin.ini: NANDRootPath), then the usual places, on Windows, Linux (Flatpak too) and
+ * macOS */
 static int dolphin_nands(char out[][1100], int max)
 {
     int n = 0;
     const char *home = SDL_getenv("HOME"), *appdata = SDL_getenv("APPDATA"), *profile = SDL_getenv("USERPROFILE");
-    char cfg[6][1100], def[6][1100];
+    char cfg[8][1100], def[8][1100];
     int nc = 0, nd = 0;
     if (appdata) {
         snprintf(cfg[nc++], sizeof cfg[0], "%s/Dolphin Emulator/Config/Dolphin.ini", appdata);
@@ -757,6 +758,10 @@ static int dolphin_nands(char out[][1100], int max)
         snprintf(cfg[nc++], sizeof cfg[0], "%s/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/Dolphin.ini", home);
         snprintf(def[nd++], sizeof def[0], "%s/.local/share/dolphin-emu/Wii", home);
         snprintf(def[nd++], sizeof def[0], "%s/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii", home);
+#ifdef __APPLE__
+        snprintf(cfg[nc++], sizeof cfg[0], "%s/Library/Application Support/Dolphin/Config/Dolphin.ini", home);
+        snprintf(def[nd++], sizeof def[0], "%s/Library/Application Support/Dolphin/Wii", home);
+#endif
     }
     for (int i = 0; i < nc && n < max; i++) {
         size_t len = 0;

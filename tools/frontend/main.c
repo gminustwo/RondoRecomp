@@ -399,7 +399,7 @@ static const char *setup_arg;   /* --autotest-setup: Setup's --autotest-play */
 static bool open_setup(char *status, size_t n)
 {
     char exe[1100];
-    snprintf(exe, sizeof exe, "%s" SETUP_PROGRAM, rondo_tools_dir());   /* programs.h: the AppImage's */
+    rondo_program(exe, sizeof exe, SETUP_PROGRAM);   /* programs.h: the AppImage's, the macOS app's */
     if (!SDL_GetPathInfo(exe, NULL)) {
         snprintf(status, n, SETUP_PROGRAM " is not next to " GAME_PROGRAM);
         return false;
@@ -465,8 +465,13 @@ static bool update_tick(Menu *m)
         else snprintf(m->upd[1], sizeof m->upd[1], "%s", line);
         snprintf(m->upd[3], sizeof m->upd[3], "Setup downloads it, puts it in place and rebuilds the game.");
         Uint64 secs = (SDL_GetTicks() - update_started) / 1000;
+#ifdef __APPLE__
+        snprintf(m->upd[4], sizeof m->upd[4], "The game restarts when it is done: %d:%02d so far.",
+                 (int)(secs / 60), (int)(secs % 60));
+#else
         snprintf(m->upd[4], sizeof m->upd[4], "The game restarts when it is done (a few minutes on a Steam Deck): %d:%02d so far.",
                  (int)(secs / 60), (int)(secs % 60));
+#endif
         if (r == RUN_INSTALLED) {
             snprintf(m->upd[1], sizeof m->upd[1], "Installed: restarting...");
             return true;
@@ -510,7 +515,7 @@ static void update_install(Menu *m)
         return;
     }
     char setup[1100], err[200];
-    snprintf(setup, sizeof setup, "%s" SETUP_CLI_PROGRAM, rondo_tools_dir());
+    rondo_program(setup, sizeof setup, SETUP_CLI_PROGRAM);
     if (!SDL_GetPathInfo(setup, NULL)) {
         snprintf(m->status, sizeof m->status, SETUP_CLI_PROGRAM " is not next to " GAME_PROGRAM ".");
         return;
