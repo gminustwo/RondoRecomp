@@ -651,14 +651,19 @@ void vdc_line_end(Vdc *d, const Vce *vce, int line)
     if ((row & 15) == 0) memcpy(line_pal[row >> 4], pal, sizeof line_pal[0]);   /* (vdc_line_palette) */
     uint8_t *spx = &sprite_px[row * PCE_FB_MAX_W];
     uint32_t *bhx = &behind_px[row * PCE_FB_MAX_W];
+    /* With the background and the sprites both off (the screen blanked, as between rooms),
+     * the console shows color $100, the border color, not the backdrop $000: Stage 0 sets
+     * its next room's red backdrop while blanked and waits 7 frames before turning the
+     * picture back on, which would otherwise flash red (#20). Mednafen does the same. */
+    uint32_t back = (cr & 0xC0) ? pal[0] : pal[0x100];
     for (int x = 0; x < w; x++) {
         uint16_t s = sp[x];
         spx[x] = s && ((s & 0x8000) || !bg[x]);
         /* (behind: a sprite's pixel the background hides, else the background colour) */
-        bhx[x] = s && !spx[x] ? pal[s & 0x1FF] : pal[0];
+        bhx[x] = s && !spx[x] ? pal[s & 0x1FF] : back;
         if (spx[x]) dst[x] = pal[s & 0x1FF];
         else if (bg[x]) dst[x] = pal[bg[x]];
-        else dst[x] = pal[0];
+        else dst[x] = back;
     }
     if (d->fb_wide) {
         /* beyond the room's walls (or the original 256 pixels on a clipped row): black
